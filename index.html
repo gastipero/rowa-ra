@@ -192,16 +192,17 @@ $('#mv').addEventListener('ar-status',e=>{if(e.detail.status==='failed')$('#msg'
 make();
 // ===== modo preciso (WebXR, Android): el robot se apoya siempre en el piso marcado =====
 const xr=navigator.xr;
-if(xr&&xr.isSessionSupported)xr.isSessionSupported('immersive-ar').then(ok=>{if(ok){$('#xrGo').hidden=false;$('#mv').setAttribute('ar-modes','scene-viewer quick-look');
+if(xr&&xr.isSessionSupported)xr.isSessionSupported('immersive-ar').then(ok=>{if(ok){$('#xrGo').hidden=false;
   $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Ajustá con las flechas y el giro. "Transparente" sirve para ver lo que queda detrás.</li><li>📷 saca una foto con el robot. Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
 let XS=null;
-$('#xrGo').addEventListener('click',startXR);
+$('#xrGo').addEventListener('click',()=>startXR().catch(e=>{$('#xro').hidden=true;try{XS&&XS.session.end()}catch(x){}$('#msg').textContent='No se pudo iniciar el modo preciso: '+(e&&e.message||e)+'. Probá con "Ver en mi espacio con la cámara".';$('#msg').scrollIntoView({block:'center'})}));
 async function startXR(){
   const ov=$('#xro');ov.hidden=false;
   let session;try{session=await xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','local-floor','camera-access'],domOverlay:{root:ov}})}
   catch(e){ov.hidden=true;$('#msg').textContent='No se pudo abrir la cámara en modo preciso ('+e.message+'). Probá con "Ver en mi espacio con la cámara".';return}
   const R=new T.WebGLRenderer({antialias:true,alpha:true});R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);R.outputEncoding=T.sRGBEncoding;R.shadowMap.enabled=true;R.xr.enabled=true;
   R.domElement.style.cssText='position:fixed;inset:0';document.body.appendChild(R.domElement);
+  XS={session,R};session.addEventListener('end',()=>{try{R.setAnimationLoop(null);R.domElement.remove()}catch(e){}$('#xro').hidden=true});
   R.xr.setReferenceSpaceType('local');await R.xr.setSession(session);
   const S=new T.Scene(),cam=new T.PerspectiveCamera();
   S.add(new T.HemisphereLight(0xffffff,0x888888,1.0));const sun=new T.DirectionalLight(0xffffff,0.7);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-10,right:10,top:10,bottom:-10,near:0.5,far:30});S.add(sun);S.add(sun.target);
