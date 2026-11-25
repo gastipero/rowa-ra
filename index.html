@@ -27,6 +27,8 @@ ol{padding-left:20px}
 .xpad{display:grid!important;grid-template-columns:repeat(6,52px);justify-content:center}
 .xrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 #xro.clean .xtop,#xro.clean .xbot{visibility:hidden}
+#xDims{position:relative;z-index:1;margin:6px 12px 0;align-self:flex-start;background:rgba(45,49,115,.85);color:#fff;border-radius:8px;padding:6px 10px;font:700 13px Montserrat,sans-serif}
+#xro.clean #xDims{visibility:hidden}
 .xshut{display:flex;justify-content:center;padding-top:4px}
 #xShot{pointer-events:auto;width:74px;height:74px;border-radius:50%;background:#fff;border:6px solid rgba(255,255,255,.45);background-clip:padding-box;box-shadow:0 0 0 3px rgba(0,0,0,.25)}
 #xShot:active{transform:scale(.92)}
@@ -69,7 +71,7 @@ ol{padding-left:20px}
 <div id="xro" hidden>
   <div id="xTouch"></div>
   <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
-  <div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
+  <p id="xDims"></p><div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
   <div class="xbot">
     <div id="xFloorBar"><button id="xFloor" class="xb big">Este es el piso</button></div>
     <div id="xPlaceBar" hidden><button id="xPlace" class="xb big">Colocar acá</button><button id="xRefloor" class="xb">Volver a marcar el piso</button></div>
@@ -219,6 +221,9 @@ async function startXR(){
   const c=cfg,n=nPan(c.L/1000),oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0);robot.add(buildInstall(c,lay,oi.length));
   robot.traverse(m=>{if(m.isMesh){m.castShadow=true;m.userData.op=m.material.opacity;m.userData.tr=m.material.transparent}});
   const ref=R.xr.getReferenceSpace(),vs=await session.requestReferenceSpace('viewer'),hts=await session.requestHitTestSource({space:vs});
+  const instN={vista:'A la vista',mostrador:'Tras mostrador',pared:'Oculto tras pared',techo:'En el techo'}[cfg.i]||'';
+  const dimTxt=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · Largo ${cfg.L.toLocaleString('es-AR')} · Ancho 1.630 · Alto ${cfg.H.toLocaleString('es-AR')} mm`;
+  $('#xDims').textContent=dimTxt+' · '+instN;
   XS={session,R};let phase='floor',floorY=null,lowY=Infinity,lastHit=null,step=0.1,ghost=false;
   const say=t=>{$('#xmsg').textContent=t};
   const bars=()=>{$('#xFloorBar').hidden=phase!=='floor';$('#xPlaceBar').hidden=phase!=='place';$('#xEditBar').hidden=phase!=='edit'};bars();
@@ -255,6 +260,9 @@ async function startXR(){
       const out=document.createElement('canvas');out.width=w;out.height=hh;const x=out.getContext('2d');
       const put=(buf)=>{const id=new ImageData(w,hh),row=w*4;for(let y=0;y<hh;y++)id.data.set(buf.subarray((hh-1-y)*row,(hh-y)*row),y*row);return id};
       x.putImageData(put(cb),0,0);const tmp=document.createElement('canvas');tmp.width=w;tmp.height=hh;tmp.getContext('2d').putImageData(put(vb),0,0);x.drawImage(tmp,0,0);
+      {const fs=Math.max(14,Math.round(w/42)),pad=Math.round(fs*0.7),bh=fs*2+pad*2.4;x.fillStyle='rgba(45,49,115,.88)';x.fillRect(0,hh-bh,w,bh);
+       x.fillStyle='#fff';x.font=`700 ${fs}px Montserrat,sans-serif`;x.textBaseline='top';x.fillText(dimTxt,pad,hh-bh+pad*0.8);
+       x.font=`600 ${Math.round(fs*0.8)}px Montserrat,sans-serif`;x.fillStyle='#cfe9f2';x.fillText(`${instN} · Automatiza · simulación ilustrativa`,pad,hh-bh+pad*0.8+fs*1.25)}
       $('#xFlash').hidden=false;setTimeout(()=>$('#xFlash').hidden=true,150);deliver(out);say('Foto guardada. La encontrás en la galería, en el álbum Descargas (Download).')}
     catch(e){say('Este celular no deja sacar la foto desde la página ('+e.message+'). Tocá "Ocultar" y hacé una captura de pantalla (power + bajar volumen), o grabá la pantalla para video.')}}
   session.addEventListener('end',()=>{R.setAnimationLoop(null);R.domElement.remove();R.dispose();ov.hidden=true;XS=null});
