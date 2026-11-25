@@ -24,6 +24,9 @@ ol{padding-left:20px}
 .xb.big{background:#ba5d9e;color:#fff;padding:14px 22px;font-size:17px}
 .xpad{display:grid!important;grid-template-columns:repeat(6,52px);justify-content:center}
 .xrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#xro.clean .xtop,#xro.clean .xbot{visibility:hidden}
+#xShow{position:fixed;right:10px;bottom:max(10px,env(safe-area-inset-bottom));opacity:.55}
+#xFlash{position:fixed;inset:0;background:#fff;opacity:.7;pointer-events:none}
 [hidden]{display:none!important}
 .pwrap{display:flex;align-items:center;gap:6px;margin-top:6px}.pend{font-size:12px;color:#5d6080}
 .pstrip{display:flex;gap:3px;overflow-x:auto;flex:1;padding:2px}
@@ -54,12 +57,13 @@ ol{padding-left:20px}
 <ol class="note" id="steps">
   <li>Tocá "Ver en mi espacio con la cámara" y apuntá al piso, moviendo el celular despacio hasta que aparezca el robot.</li>
   <li>El robot aparece en tamaño real. Arrastralo con un dedo para moverlo y girálo con dos.</li>
-  <li>Android necesita Chrome y los "Servicios de Google Play para RA" (ARCore). En iPhone y iPad se abre con Safari.</li>
+  <li>Android necesita Chrome y los "Servicios de Google Play para RA" (ARCore). En iPhone y iPad se abre con Safari: ahí el botón blanco de la cámara saca foto y, si lo mantenés apretado, graba video.</li>
 </ol>
 <p class="note">Frente de carga, salidas y vidrios ilustrativos. Las medidas son las de la cotización. Generado por la Calculadora de capacidad BD Rowa de Automatiza.</p>
 </main>
 <div id="xro" hidden>
-  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xExit" class="xb">Salir</button></div>
+  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xShot" class="xb" aria-label="Sacar foto">📷</button><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
+  <div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
   <div class="xbot">
     <div id="xFloorBar"><button id="xFloor" class="xb big">Este es el piso</button></div>
     <div id="xPlaceBar" hidden><button id="xPlace" class="xb big">Colocar acá</button><button id="xRefloor" class="xb">Volver a marcar el piso</button></div>
@@ -189,12 +193,12 @@ make();
 // ===== modo preciso (WebXR, Android): el robot se apoya siempre en el piso marcado =====
 const xr=navigator.xr;
 if(xr&&xr.isSessionSupported)xr.isSessionSupported('immersive-ar').then(ok=>{if(ok){$('#xrGo').hidden=false;$('#mv').setAttribute('ar-modes','scene-viewer quick-look');
-  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Ajustá con las flechas y el giro. "Transparente" sirve para ver lo que queda detrás.</li>'}}).catch(()=>{});
+  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Ajustá con las flechas y el giro. "Transparente" sirve para ver lo que queda detrás.</li><li>📷 saca una foto con el robot. Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
 let XS=null;
 $('#xrGo').addEventListener('click',startXR);
 async function startXR(){
   const ov=$('#xro');ov.hidden=false;
-  let session;try{session=await xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','local-floor'],domOverlay:{root:ov}})}
+  let session;try{session=await xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','local-floor','camera-access'],domOverlay:{root:ov}})}
   catch(e){ov.hidden=true;$('#msg').textContent='No se pudo abrir la cámara en modo preciso ('+e.message+'). Probá con "Ver en mi espacio con la cámara".';return}
   const R=new T.WebGLRenderer({antialias:true,alpha:true});R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);R.outputEncoding=T.sRGBEncoding;R.shadowMap.enabled=true;R.xr.enabled=true;
   R.domElement.style.cssText='position:fixed;inset:0';document.body.appendChild(R.domElement);
@@ -224,9 +228,31 @@ async function startXR(){
       const xc=R.xr.getCamera(cam),fw=new T.Vector3();xc.getWorldDirection(fw);fw.y=0;fw.normalize();const rt=new T.Vector3(-fw.z,0,fw.x);
       robot.position.add(rt.multiplyScalar(v.x)).add(fw.multiplyScalar(-v.z))}});
   $('#xExit').onclick=()=>session.end();
+  $('#xHide').onclick=()=>{ov.classList.add('clean');$('#xShow').hidden=false;say('')};
+  $('#xShow').onclick=()=>{ov.classList.remove('clean');$('#xShow').hidden=true};
+  let wantShot=false,binding=null;try{binding=new XRWebGLBinding(session,R.getContext())}catch(e){}
+  $('#xShot').onclick=()=>{wantShot=true};
+  async function deliver(canvas){const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));const name=`robot-rowa-${Date.now()}.jpg`;
+    try{const f=new File([blob],name,{type:'image/jpeg'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Robot BD Rowa'});return}}catch(e){if(e&&e.name==='AbortError')return}
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove()}
+  function shoot(frame){wantShot=false;
+    try{const pose=frame.getViewerPose(ref),view=pose&&pose.views[0];
+      if(!binding||!view||!view.camera)throw new Error('sin acceso a la cámara');
+      const gl=R.getContext(),w=view.camera.width,hh=view.camera.height,tex=binding.getCameraImage(view.camera);
+      const fb=gl.createFramebuffer(),prev=gl.getParameter(gl.FRAMEBUFFER_BINDING);gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tex,0);
+      const cb=new Uint8Array(w*hh*4);gl.readPixels(0,0,w,hh,gl.RGBA,gl.UNSIGNED_BYTE,cb);gl.bindFramebuffer(gl.FRAMEBUFFER,prev);gl.deleteFramebuffer(fb);R.resetState();
+      const vc=R.xr.getCamera().cameras[0]||R.xr.getCamera(),pc=new T.PerspectiveCamera();pc.matrixAutoUpdate=false;pc.matrixWorld.copy(vc.matrixWorld);pc.matrixWorldInverse.copy(vc.matrixWorldInverse);pc.projectionMatrix.copy(vc.projectionMatrix);pc.projectionMatrixInverse.copy(vc.projectionMatrixInverse);
+      const rt=new T.WebGLRenderTarget(w,hh);rt.texture.encoding=T.sRGBEncoding;const vis=[ring.visible];ring.visible=false;
+      const prevRT=R.getRenderTarget();R.xr.enabled=false;R.setRenderTarget(rt);R.setClearColor(0x000000,0);R.clear();R.render(S,pc);const vb=new Uint8Array(w*hh*4);R.readRenderTargetPixels(rt,0,0,w,hh,vb);R.xr.enabled=true;R.setRenderTarget(prevRT);rt.dispose();ring.visible=vis[0];
+      const out=document.createElement('canvas');out.width=w;out.height=hh;const x=out.getContext('2d');
+      const put=(buf)=>{const id=new ImageData(w,hh),row=w*4;for(let y=0;y<hh;y++)id.data.set(buf.subarray((hh-1-y)*row,(hh-y)*row),y*row);return id};
+      x.putImageData(put(cb),0,0);const tmp=document.createElement('canvas');tmp.width=w;tmp.height=hh;tmp.getContext('2d').putImageData(put(vb),0,0);x.drawImage(tmp,0,0);
+      $('#xFlash').hidden=false;setTimeout(()=>$('#xFlash').hidden=true,150);deliver(out);say('Foto lista: elegí dónde guardarla o compartirla.')}
+    catch(e){say('Este celular no deja sacar la foto desde la página ('+e.message+'). Tocá "Ocultar" y hacé una captura de pantalla (power + bajar volumen), o grabá la pantalla para video.')}}
   session.addEventListener('end',()=>{R.setAnimationLoop(null);R.domElement.remove();R.dispose();ov.hidden=true;XS=null});
   const ray=new T.Raycaster(),hit=new T.Vector3(),pl=new T.Plane(new T.Vector3(0,1,0),0);
   R.setAnimationLoop((t,frame)=>{
+    if(wantShot&&frame)shoot(frame);
     if(frame){const rs=frame.getHitTestResults(hts);
       if(rs.length){const p=rs[0].getPose(ref);if(p){lastHit=new T.Vector3().copy(p.transform.position);lowY=Math.min(lowY,lastHit.y)}}else lastHit=null}
     const xc=R.xr.getCamera(cam);
