@@ -52,6 +52,8 @@ ol{padding-left:20px}
   <label>Alto<select id="H"></select></label>
   <label>Color<select id="c"><option value="white">Blanco</option><option value="anth">Antracita</option></select></label>
   <label>Instalación<select id="i"><option value="vista">A la vista</option><option value="mostrador">Tras un mostrador</option><option value="pared">Oculto tras pared (salidas directas)</option><option value="techo">En el techo / planta alta (espirales)</option></select></label>
+  <label id="la">Brazos<select id="a"><option value="1">1 brazo</option><option value="2">2 brazos</option></select></label>
+  <label>Ver por dentro<select id="v"><option value="0">No</option><option value="1">Sí, con los brazos en movimiento</option></select></label>
   <label id="ld">Distancia mostrador–robot<select id="d"></select></label>
   <label id="lt">Altura del techo<select id="t"></select></label>
   <label id="lx" class="chkl"><span>Robot oculto</span><select id="x"><option value="1">Mostrar transparente</option><option value="0">No mostrar</option></select></label>
@@ -117,8 +119,8 @@ function defLayout(n,outs,glass){const a=Array(n).fill(0);let k=0;for(let i=1;i<
   let g=0;for(let i=n-1;i>0&&g<glass;i--)if(!a[i]){a[i]=2;g++}return a}
 function buildRobot(c,col,o={}){
   const P=PAL[col],g=new T.Group(),L=c.L/1000,H=c.H/1000,body=new T.Group();g.add(body);g.userData.body=body;
-  const mb=mat(P.body,{roughness:.45}),ms=mat(P.seam),mm=mat(P.mod,{roughness:.4}),mp=mat(P.plinth),mk=mat(0x0c0d10,{roughness:.2,metalness:.3});
-  body.add(box(L,H-0.05,W,mb,0,0.05+(H-0.05)/2,0));
+  const mb=o.interior?mat(P.body,{roughness:.3,transparent:true,opacity:.16,depthWrite:false}):mat(P.body,{roughness:.45}),ms=mat(P.seam),mm=mat(P.mod,{roughness:.4}),mp=mat(P.plinth),mk=mat(0x0c0d10,{roughness:.2,metalness:.3});
+  {const sh=box(L,H-0.05,W,mb,0,0.05+(H-0.05)/2,0);if(o.interior){sh.castShadow=false;sh.renderOrder=2}body.add(sh)}
   body.add(box(L-0.02,0.05,W-0.02,mp,0,0.025,0));
   const n=Math.max(2,Math.round(L/0.72));
   for(let i=1;i<n;i++){const x=-L/2+i*L/n;[1,-1].forEach(s=>body.add(box(0.008,H-0.12,0.004,ms,x,0.05+(H-0.05)/2,s*(W/2+0.002),false)))}
@@ -142,14 +144,53 @@ function buildRobot(c,col,o={}){
     gl.position.set(x,0.3+gh/2,W/2+0.012);body.add(gl)});
   const outs=new T.Group();g.add(outs);g.userData.outs=outs;g.userData.outX=outX;
   if(o.outputs!==false)outX.forEach(x=>{const u=outUnit(col);u.position.set(x,o.outY||1.1,W/2);outs.add(u)});
+  if(o.interior){const it=buildInterior(L,H,outX,o.arms||1,o.outY||1.1,y0+mh*0.38);g.add(it.group);g.userData.clip=it.clip}
   return g;
 }
+// interior: estanterías a ambos lados del pasillo y brazo(s) operador(es) animados
+function buildInterior(L,H,outX,arms,outY,inY){
+  const G=new T.Group(),tex=shelves().clone();tex.needsUpdate=true;tex.wrapS=T.RepeatWrapping;tex.repeat.set(Math.max(1,Math.round(L/0.6)),1);
+  const sm=new T.MeshStandardMaterial({map:tex,roughness:.6});
+  {const p=new T.Mesh(new T.PlaneGeometry(L-0.5,H-0.3),sm);p.position.set(-0.1,0.15+(H-0.3)/2,-0.36);G.add(p)}
+  // lado cercano (+Z): solo los estantes, para ver el pasillo y los brazos
+  const bm=mat(0xc9ced4,{metalness:.3,roughness:.5});for(let y=0.3;y<H-0.2;y+=0.64)G.add(box(L-0.5,0.012,0.06,bm,-0.1,y,0.4,false));
+  for(let x=-L/2+0.4;x<L/2-0.3;x+=1.2)G.add(box(0.03,H-0.3,0.03,bm,x,0.15+(H-0.3)/2,0.36,false));
+  const rm=mat(0x9aa0a8,{metalness:.6,roughness:.3});G.add(box(L-0.3,0.05,0.12,rm,0,H-0.14,0,false));G.add(box(L-0.3,0.05,0.12,rm,0,0.1,0,false));
+  const tracks=[],DUR=36;let seed=11;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  const xMin=-L/2+0.45,xMax=L/2-0.45;
+  for(let a=0;a<arms;a++){
+    const arm=new T.Group();arm.name='rowaArm'+a;G.add(arm);
+    const am=mat(a?0x5a6472:0x3d4550,{metalness:.4,roughness:.4}),acc=mat(0x2d5fd0,{emissive:0x2d5fd0,emissiveIntensity:.4});
+    arm.add(box(0.1,H-0.3,0.14,am,0,0.15+(H-0.3)/2,0));arm.add(box(0.3,0.1,0.2,am,0,H-0.16,0));arm.add(box(0.3,0.1,0.2,am,0,0.12,0));
+    const grip=new T.Group();grip.name='rowaGrip'+a;arm.add(grip);
+    grip.add(box(0.34,0.06,0.34,mat(0x2d5fd0,{roughness:.4}),0,0,0));grip.add(box(0.04,0.04,0.04,acc,0.15,0.05,0.15,false));
+    const fork=new T.Group();fork.name='rowaFork'+a;grip.add(fork);
+    fork.add(box(0.03,0.14,0.22,mat(0xc9ced4,{metalness:.5}),-0.09,0.1,0.06));fork.add(box(0.03,0.14,0.22,mat(0xc9ced4,{metalness:.5}),0.09,0.1,0.06));
+    fork.add(box(0.12,0.08,0.1,mat(0xe9c46a),0,0.08,0.08));
+    // recorrido: entrada → estante (guardar) y estante → salida (despachar)
+    const lo=arms===2?(a===0?0:xMin+(xMax-xMin)*0.45):xMin,hi=arms===2?(a===0?xMax:xMin+(xMax-xMin)*0.55):xMax;
+    const zoneLo=arms===2&&a===0?xMin+(xMax-xMin)*0.45:lo,zoneHi=arms===2&&a===1?xMin+(xMax-xMin)*0.55:hi;
+    const tX=[],vX=[],tY=[],vY=[],tR=[],vR=[],tF=[],vF=[];let t=a*1.7,x=arms===2&&a===1?xMin+0.5:xMax-0.3,y=1.1,r=0;
+    const key=()=>{tX.push(t);vX.push(x,0,0);tY.push(t);vY.push(0,y,0);tR.push(t);vR.push(...new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),r).toArray());tF.push(t);vF.push(0,0,0)};
+    const ext=()=>{const t0=t;tF.push(t0+0.35,t0+0.7);vF.push(0,0,0.28,0,0,0);t+=0.9;tX.push(t);vX.push(x,0,0);tY.push(t);vY.push(0,y,0);tR.push(t);vR.push(...new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),r).toArray());tF.push(t);vF.push(0,0,0)};
+    const go=(nx,ny,nr)=>{const d=Math.max(Math.abs(nx-x)/1.6,Math.abs(ny-y)/1.2,0.6);t+=d;x=nx;y=ny;r=nr;key()};
+    key();
+    const outs=outX.filter(v=>v>=lo-0.4&&v<=hi+0.4);
+    while(t<DUR-5){const sx=zoneLo+rnd()*(zoneHi-zoneLo),sy=0.35+rnd()*(H-0.8),side=rnd()<0.5?0:Math.PI;
+      if(rnd()<0.5&&(a===0||arms===1)){go(xMax-0.05,inY,Math.PI/2);ext();go(sx,sy,side);ext()}
+      else{go(sx,sy,side);ext();const ox=outs.length?outs[Math.floor(rnd()*outs.length)]:xMax-0.05;go(ox,outY,ox===xMax-0.05?Math.PI/2:0);ext()}}
+    go(tX.length?vX[0]:x,vY[1],0);t=DUR;key();
+    const cut=(ts,vs,n)=>{const T2=[],V2=[];ts.forEach((tt,i)=>{if(tt<=DUR&&(!T2.length||tt>T2[T2.length-1])){T2.push(tt);V2.push(...vs.slice(i*n,i*n+n))}});return [T2,V2]};
+    const [a1,b1]=cut(tX,vX,3),[a2,b2]=cut(tY,vY,3),[a3,b3]=cut(tR,vR,4),[a4,b4]=cut(tF,vF,3);
+    tracks.push(new T.VectorKeyframeTrack(arm.name+'.position',a1,b1),new T.VectorKeyframeTrack(grip.name+'.position',a2,b2),new T.QuaternionKeyframeTrack(grip.name+'.quaternion',a3,b3),new T.VectorKeyframeTrack(fork.name+'.position',a4,b4));
+  }
+  return {group:G,clip:new T.AnimationClip('brazos',DUR,tracks)}}
 function ghostMat(){return new T.MeshStandardMaterial({color:0x6f8fd8,transparent:true,opacity:.22,depthWrite:false,roughness:.6})}
 function buildInstall(cfg,lay,nOut){
   const root=new T.Group(),L=cfg.L/1000,H=cfg.H/1000,mode=cfg.i,hc=0.9,dep=0.6,sep=cfg.d,ceil=Math.max(cfg.t,H+0.1);
-  const g=buildRobot({L:cfg.L,H:cfg.H,outs:nOut},cfg.c,{layout:lay,outputs:mode!=='techo',outY:mode==='pared'?hc+0.25:1.1});root.add(g);
+  const g=buildRobot({L:cfg.L,H:cfg.H,outs:nOut},cfg.c,{layout:lay,outputs:mode!=='techo',outY:mode==='pared'?hc+0.25:1.1,interior:!!cfg.v,arms:cfg.a});root.add(g);root.userData.clip=g.userData.clip;
   const hidden=mode==='pared'||mode==='techo';
-  if(hidden){if(cfg.x)g.userData.body.traverse(m=>{if(m.isMesh){m.material=ghostMat();m.castShadow=false}});else g.userData.body.visible=false}
+  if(hidden&&!cfg.v){if(cfg.x)g.userData.body.traverse(m=>{if(m.isMesh){m.material=ghostMat();m.castShadow=false}});else g.userData.body.visible=false}
   if(mode==='techo')g.position.y=ceil;
   // mostrador delante del lado de las salidas (+Z)
   const counterZ=mode==='techo'?W/2-0.3-dep/2+0.1:W/2+sep+dep/2;
@@ -173,15 +214,16 @@ const P=new URLSearchParams(location.hash.slice(1));
 const opt=(id,a,f)=>{$('#'+id).innerHTML=a.map(v=>`<option value="${v}">${f(v)}</option>`).join('')};
 opt('d',[0.6,0.8,1,1.2,1.4,1.6,1.8,2,2.5,3],v=>v.toFixed(1).replace('.',',')+' m');
 opt('t',[2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4],v=>v.toFixed(1).replace('.',',')+' m');
-const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',i:P.get('i')||'vista',d:+P.get('d')||1.2,t:+P.get('t')||3,x:P.has('x')?+P.get('x'):1};
+const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',i:P.get('i')||'vista',d:+P.get('d')||1.2,t:+P.get('t')||3,x:P.has('x')?+P.get('x'):1,a:+P.get('a')===2?2:1,v:+P.get('v')?1:0};
 if(!['vista','mostrador','pared','techo'].includes(cfg.i))cfg.i='vista';
 let lay=(P.get('p')||'').split('').map(Number).filter(v=>v>=0&&v<=2);const o0=P.has('o')?+P.get('o'):2;
-cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','i','d','t','x'])$('#'+k).value=String(cfg[k]);
+cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','i','d','t','x','a','v'])$('#'+k).value=String(cfg[k]);
 for(const k of ['d','t']){const sel=$('#'+k);if(!sel.value){const vs=[...sel.options].map(o=>+o.value);sel.value=String(near(vs,cfg[k]))}}
 $('#m').addEventListener('change',()=>fill($('#m').value,+$('#L').value,+$('#H').value));
 let url=null;
 async function make(){
   for(const k in cfg)cfg[k]=['m','c','i'].includes(k)?$('#'+k).value:+$('#'+k).value;
+  if(cfg.m==='smart')cfg.a=1;$('#la').hidden=cfg.m==='smart';
   $('#ld').hidden=cfg.i==='vista';$('#lt').hidden=cfg.i!=='techo';$('#lx').hidden=!['pared','techo'].includes(cfg.i);
   $('#idesc').textContent={vista:'El robot queda apoyado en el piso, a la vista.',mostrador:'Se agrega un mostrador de 0,90 m delante del robot, del lado de las salidas.',pared:'Se dibuja una pared delante del robot con las salidas directas a la altura de la mesada, y el mostrador delante. El robot queda detrás de la pared.',techo:'El robot queda arriba, a la altura del techo, y bajan espirales desde cada salida hasta el mostrador. En la cámara el techo real no lo tapa: usá "Robot oculto" para verlo transparente o esconderlo.'}[cfg.i];
   const n=nPan(cfg.L/1000);if(lay.length!==n)lay=lay.length?Array.from({length:n},(_,i)=>lay[i]||0):defLayout(n,o0,0);
@@ -190,8 +232,9 @@ async function make(){
   $('#pinfo').textContent=oi.length?'Salidas a '+oi.map(i=>Math.round((i+0.5)*pitch).toLocaleString('es-AR')+' mm').join(', ')+' del frente (centro de cada salida).':'Sin salidas en el lateral.';
   history.replaceState(null,'','#'+new URLSearchParams({...cfg,p:lay.join('')}).toString());
   $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
-  const sc=new T.Scene();sc.add(buildInstall(cfg,lay,oi.length));
-  try{const glb=await new Promise((ok,ko)=>new T.GLTFExporter().parse(sc,ok,ko,{binary:true}));
+  const sc=new T.Scene(),inst=buildInstall(cfg,lay,oi.length);sc.add(inst);const clip=inst.userData.clip;
+  try{const glb=await new Promise((ok,ko)=>new T.GLTFExporter().parse(sc,ok,ko,{binary:true,animations:clip?[clip]:[]}));
+    if(clip)$('#mv').setAttribute('autoplay','');else $('#mv').removeAttribute('autoplay');
     if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(new Blob([glb],{type:'model/gltf-binary'}));$('#mv').src=url;$('#msg').textContent=''}
   catch(e){$('#msg').textContent='No se pudo generar el modelo: '+e.message}
 }
@@ -218,7 +261,8 @@ async function startXR(){
   const ring=new T.Mesh(new T.RingGeometry(0.12,0.16,40).rotateX(-Math.PI/2),new T.MeshBasicMaterial({color:0xffffff}));ring.visible=false;S.add(ring);
   const shadow=new T.Mesh(new T.PlaneGeometry(40,40).rotateX(-Math.PI/2),new T.ShadowMaterial({opacity:.25}));shadow.receiveShadow=true;shadow.visible=false;S.add(shadow);
   const robot=new T.Group();robot.visible=false;S.add(robot);
-  const c=cfg,n=nPan(c.L/1000),oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0);robot.add(buildInstall(c,lay,oi.length));
+  const c=cfg,n=nPan(c.L/1000),oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0),inst=buildInstall(c,lay,oi.length);robot.add(inst);
+  let mixer=null;if(inst.userData.clip){mixer=new T.AnimationMixer(inst);mixer.clipAction(inst.userData.clip).play()}const clk=new T.Clock();
   robot.traverse(m=>{if(m.isMesh){m.castShadow=true;m.userData.op=m.material.opacity;m.userData.tr=m.material.transparent}});
   const ref=R.xr.getReferenceSpace(),vs=await session.requestReferenceSpace('viewer'),hts=await session.requestHitTestSource({space:vs});
   const instN={vista:'A la vista',mostrador:'Tras mostrador',pared:'Oculto tras pared',techo:'En el techo'}[cfg.i]||'';
@@ -281,6 +325,7 @@ async function startXR(){
   const up=e=>{pts.delete(e.pointerId);if(pts.size===1){const q=[...pts.values()][0];grab=floorAt(q.x,q.y);twist=null}else if(!pts.size){grab=null;twist=null}};
   TL.addEventListener('pointerup',up);TL.addEventListener('pointercancel',up);
   R.setAnimationLoop((t,frame)=>{
+    if(mixer)mixer.update(Math.min(0.1,clk.getDelta()));
     if(wantShot&&frame)shoot(frame);
     if(frame){const rs=frame.getHitTestResults(hts);
       if(rs.length){const p=rs[0].getPose(ref);if(p){lastHit=new T.Vector3().copy(p.transform.position);lowY=Math.min(lowY,lastHit.y)}}else lastHit=null}
