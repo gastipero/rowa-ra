@@ -18,8 +18,8 @@ ol{padding-left:20px}
 #xro[hidden]{display:none}
 #xTouch{position:fixed;inset:0;pointer-events:auto;touch-action:none;z-index:0}
 .xtop,.xbot{position:relative;z-index:1}
-.xtop{display:flex;gap:8px;align-items:flex-start;padding:max(12px,env(safe-area-inset-top)) 12px 0}
-.xtop p{flex:1;margin:0;background:rgba(29,29,27,.78);color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
+.xtop{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;padding:max(12px,env(safe-area-inset-top)) 12px 0}
+.xtop p{flex:1 1 100%;margin:0;background:rgba(29,29,27,.78);color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
 .xbot{padding:0 12px max(14px,env(safe-area-inset-bottom));display:grid;gap:8px}
 .xbot>div{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .xb{pointer-events:auto;background:rgba(255,255,255,.92);color:#1d1d1b;border:0;border-radius:10px;min-width:48px;min-height:48px;padding:8px 12px;font:700 15px Montserrat,sans-serif}
@@ -73,7 +73,7 @@ ol{padding-left:20px}
 </main>
 <div id="xro" hidden>
   <div id="xTouch"></div>
-  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
+  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xInside" class="xb">Interior: no</button><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
   <p id="xDims"></p><div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
   <div class="xbot">
     <div id="xFloorBar"><button id="xFloor" class="xb big">Este es el piso</button></div>
@@ -281,14 +281,18 @@ async function startXR(){
   const ring=new T.Mesh(new T.RingGeometry(0.12,0.16,40).rotateX(-Math.PI/2),new T.MeshBasicMaterial({color:0xffffff}));ring.visible=false;S.add(ring);
   const shadow=new T.Mesh(new T.PlaneGeometry(40,40).rotateX(-Math.PI/2),new T.ShadowMaterial({opacity:.25}));shadow.receiveShadow=true;shadow.visible=false;S.add(shadow);
   const robot=new T.Group();robot.visible=false;S.add(robot);
-  const c=cfg,n=nPan(c.L/1000),oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0),inst=buildInstall(c,lay,oi.length);robot.add(inst);
-  let mixer=null;if(inst.userData.clip){mixer=new T.AnimationMixer(inst);mixer.clipAction(inst.userData.clip).play()}const clk=new T.Clock();
-  robot.traverse(m=>{if(m.isMesh){m.castShadow=true;m.userData.op=m.material.opacity;m.userData.tr=m.material.transparent}});
+  const oi=lay.map((v,i)=>v===1||v===3?i:-1).filter(i=>i>=0);let inst=null,mixer=null,ghost=false,inside=!!cfg.v;const clk=new T.Clock();
+  const applyGhost=()=>robot.traverse(m=>{if(m.isMesh){m.material.transparent=ghost||m.userData.tr;m.material.opacity=ghost?Math.min(m.userData.op,0.45):m.userData.op;m.material.needsUpdate=true}});
+  function setInst(){if(inst)robot.remove(inst);inst=buildInstall({...cfg,v:inside?1:0},lay,oi.length);robot.add(inst);
+    inst.traverse(m=>{if(m.isMesh){m.castShadow=true;m.userData.op=m.material.opacity;m.userData.tr=m.material.transparent}});
+    mixer=null;if(inst.userData.clip){mixer=new T.AnimationMixer(inst);mixer.clipAction(inst.userData.clip).play()}if(ghost)applyGhost();
+    $('#xInside').textContent='Interior: '+(inside?'sí':'no')}
+  setInst();
   const ref=R.xr.getReferenceSpace(),vs=await session.requestReferenceSpace('viewer'),hts=await session.requestHitTestSource({space:vs});
   const instN={vista:'A la vista',mostrador:'Tras mostrador',pared:'Oculto tras pared',techo:'En el techo'}[cfg.i]||'';
   const dimTxt=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · Largo ${cfg.L.toLocaleString('es-AR')} · Ancho 1.630 · Alto ${cfg.H.toLocaleString('es-AR')} mm`;
   $('#xDims').textContent=dimTxt+' · '+instN;
-  XS={session,R};let phase='floor',floorY=null,lowY=Infinity,lastHit=null,step=0.1,ghost=false;
+  XS={session,R};let phase='floor',floorY=null,lowY=Infinity,lastHit=null,step=0.1;
   const say=t=>{$('#xmsg').textContent=t};
   const bars=()=>{$('#xFloorBar').hidden=phase!=='floor';$('#xPlaceBar').hidden=phase!=='place';$('#xEditBar').hidden=phase!=='edit'};bars();
   ov.addEventListener('beforexrselect',e=>e.preventDefault());
@@ -297,7 +301,8 @@ async function startXR(){
   $('#xPlace').onclick=()=>{phase='edit';bars();ring.visible=false;say('Listo. Un dedo lo mueve sobre el piso, dos dedos lo giran. Las flechas sirven para el ajuste fino.')};
   $('#xMove').onclick=()=>{phase='place';bars();say('Apuntá adonde va el robot y tocá "Colocar acá".')};
   $('#xStep').onclick=()=>{step=step===0.1?0.02:step===0.02?0.5:0.1;$('#xStep').textContent=step===0.1?'Paso: 10 cm / 5°':step===0.02?'Paso: 2 cm / 1°':'Paso: 50 cm / 15°'};
-  $('#xGhost').onclick=()=>{ghost=!ghost;$('#xGhost').textContent='Transparente: '+(ghost?'sí':'no');robot.traverse(m=>{if(m.isMesh){m.material.transparent=ghost||m.userData.tr;m.material.opacity=ghost?Math.min(m.userData.op,0.45):m.userData.op;m.material.needsUpdate=true}})};
+  $('#xGhost').onclick=()=>{ghost=!ghost;$('#xGhost').textContent='Transparente: '+(ghost?'sí':'no');applyGhost()};
+  $('#xInside').onclick=()=>{inside=!inside;setInst();say(inside?'Interior visible: el robot se ve por dentro con los brazos trabajando.':'Interior oculto: se ve el robot cerrado.')};
   document.querySelectorAll('#xro [data-m]').forEach(b=>b.onclick=()=>{const k=b.dataset.m,ang=step===0.1?5:step===0.02?1:15;
     if(k==='rl')robot.rotation.y+=ang*Math.PI/180;else if(k==='rr')robot.rotation.y-=ang*Math.PI/180;
     else{const v=new T.Vector3(k==='l'?-step:k==='r'?step:0,0,k==='f'?-step:k==='b'?step:0);
