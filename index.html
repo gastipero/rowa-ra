@@ -13,6 +13,10 @@ model-viewer{width:100%;height:min(62vh,560px);background:linear-gradient(#eef1f
 label{display:grid;gap:4px;font-size:13px;color:#5d6080}select,input{font:600 16px Montserrat,sans-serif;padding:9px;border:1px solid #d9dbe8;border-radius:8px;background:#fff;min-height:44px}
 .dims{font-weight:700;font-size:17px;margin:10px 0}.note{font-size:13px;color:#5d6080}
 ol{padding-left:20px}
+.pwrap{display:flex;align-items:center;gap:6px;margin-top:6px}.pend{font-size:12px;color:#5d6080}
+.pstrip{display:flex;gap:3px;overflow-x:auto;flex:1;padding:2px}
+.pcell{flex:1 0 32px;min-height:52px;border:1px solid #d9dbe8;border-radius:6px;background:#fff;font:600 12px Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1d1d1b;padding:2px}
+.pcell i{font-style:normal;font-size:10px}.pcell.p1{background:#1d1d1b;color:#fff}.pcell.p2{background:#86cde0}
 </style></head><body>
 <header><b>AUTOMATIZA</b><h1>Robot BD Rowa en realidad aumentada</h1></header>
 <main>
@@ -25,9 +29,9 @@ ol{padding-left:20px}
   <label>Largo<select id="L"></select></label>
   <label>Alto<select id="H"></select></label>
   <label>Color<select id="c"><option value="white">Blanco</option><option value="anth">Antracita</option></select></label>
-  <label>Salidas<input id="o" type="number" min="0" max="12" step="1"></label>
-  <label>Vidrios laterales<select id="g"><option>0</option><option>1</option><option>2</option><option>3</option></select></label>
 </div>
+<div class="panels"><b>Paneles del lateral</b> <span class="note">Tocá un panel: liso → salida → vidrio.</span>
+<div class="pwrap"><span class="pend">Fondo</span><div class="pstrip" id="strip"></div><span class="pend">Frente</span></div><p class="note" id="pinfo"></p></div>
 <p class="note" id="msg"></p>
 <ol class="note">
   <li>Tocá "Ver en mi espacio con la cámara" y apuntá al piso, moviendo el celular despacio hasta que aparezca el robot.</li>
@@ -65,6 +69,10 @@ function spiral(y0,y1){const g=new T.Group(),m=mat(0x8b9198,{metalness:.55,rough
   const t=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts),Math.ceil(turns*48),0.055,8,false),m);t.castShadow=true;g.add(t);
   g.add(box(0.05,h,0.05,m,0,y0+h/2,0));
   const tr=box(0.34,0.03,0.32,mat(0x15171a),0,y0+0.02,0.2);g.add(tr);return g}
+// paneles del lateral, numerados desde el frente de carga: 0 liso, 1 salida, 2 vidrio
+const nPan=L=>Math.max(2,Math.round(L/0.72));
+function defLayout(n,outs,glass){const a=Array(n).fill(0);let k=0;for(let i=1;i<n&&k<outs;i+=2){a[i]=1;k++}for(let i=1;i<n&&k<outs;i++)if(!a[i]){a[i]=1;k++}
+  let g=0;for(let i=n-1;i>0&&g<glass;i--)if(!a[i]){a[i]=2;g++}return a}
 function buildRobot(c,col,o={}){
   const P=PAL[col],g=new T.Group(),L=c.L/1000,H=c.H/1000,body=new T.Group();g.add(body);g.userData.body=body;
   const mb=mat(P.body,{roughness:.45}),ms=mat(P.seam),mm=mat(P.mod,{roughness:.4}),mp=mat(P.plinth),mk=mat(0x0c0d10,{roughness:.2,metalness:.3});
@@ -84,12 +92,9 @@ function buildRobot(c,col,o={}){
   z+=0.55+0.08;
   const rw=W/2-z; if(rw>0.15)body.add(box(0.012,0.22,Math.min(0.26,rw-0.08),mk,xf,y0+mh*0.45,z+rw/2,false));
   // vidrios laterales y salidas sobre el lado +Z
-  const gN=o.glass||0,no=Math.max(0,c.outs||0),slots=[];
-  for(let x=L/2-0.55;x>-L/2+0.4;x-=0.72)slots.push(x);
-  const glassX=[],outX=[];let si=0;
-  for(let i=0;i<gN&&si<slots.length;i++){glassX.push(slots[si]);si+= (i<no?2:1)}
-  for(let i=0;i<no;i++){const free=slots.filter(x=>!glassX.includes(x)&&!outX.includes(x));const pick=glassX.length&&i<glassX.length?slots[slots.indexOf(glassX[i])+1]:free[0];if(pick===undefined)break;outX.push(pick)}
-  const gw=0.6,gh=Math.max(0.8,H-0.6),tex=gN?shelves():null;
+  const pitch=L/n,lay=o.layout&&o.layout.length===n?o.layout:defLayout(n,c.outs||0,0);
+  const glassX=[],outX=[];lay.forEach((v,i)=>{const x=L/2-(i+0.5)*pitch;if(v===1)outX.push(x);if(v===2)glassX.push(x)});
+  const gw=Math.max(0.3,pitch-0.14),gh=Math.max(0.8,H-0.6),tex=glassX.length?shelves():null;
   glassX.forEach(x=>{body.add(box(gw+0.06,gh+0.06,0.012,mat(0xc4c9ce,{metalness:.5,roughness:.3}),x,0.3+gh/2,W/2+0.004,false));
     const gl=new T.Mesh(new T.PlaneGeometry(gw,gh),new T.MeshStandardMaterial({map:tex,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:.35,roughness:.12,metalness:.1}));
     gl.position.set(x,0.3+gh/2,W/2+0.012);body.add(gl)});
@@ -97,7 +102,6 @@ function buildRobot(c,col,o={}){
   if(o.outputs!==false)outX.forEach(x=>{const u=outUnit(col);u.position.set(x,o.outY||1.1,W/2);outs.add(u)});
   return g;
 }
-
 const VL=[2614,3095,3575,4056,4536,5017,5497,5978,6458,6939,7419,7900,8380,8861,9341,9822,10302,10783,11263,11744,12224,12705,13185,13666,14146,14627,15107].map(c=>Math.round((c+62)/10)*10);
 const VH=Array.from({length:37},(_,i)=>1720+i*50);
 const SIZES={vmax:{L:VL,H:VH},smart:{L:[3280,3580,4060,4540,5020,5500,5980,6460],H:[2320,2520,2820]}};
@@ -105,21 +109,27 @@ const near=(a,v)=>a.reduce((b,x)=>Math.abs(x-v)<Math.abs(b-v)?x:b,a[0]);
 function fill(m,L,H){for(const k of ['L','H']){const sel=$('#'+k),list=SIZES[m][k],v=near(list,k==='L'?L:H);
   sel.innerHTML=list.map(x=>`<option value="${x}">${x.toLocaleString('es-AR')} mm</option>`).join('');sel.value=String(v)}}
 const P=new URLSearchParams(location.hash.slice(1));
-const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',o:P.has('o')?+P.get('o'):2,g:+P.get('g')||0};
-cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','o','g'])$('#'+k).value=cfg[k];
+const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white'};
+let lay=(P.get('p')||'').split('').map(Number).filter(v=>v>=0&&v<=2);const o0=P.has('o')?+P.get('o'):2;
+cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c'])$('#'+k).value=cfg[k];
 $('#m').addEventListener('change',()=>fill($('#m').value,+$('#L').value,+$('#H').value));
 let url=null;
 async function make(){
   for(const k in cfg)cfg[k]=['m','c'].includes(k)?$('#'+k).value:+$('#'+k).value;
-  history.replaceState(null,'','#'+new URLSearchParams(cfg).toString());
+  const n=nPan(cfg.L/1000);if(lay.length!==n)lay=lay.length?Array.from({length:n},(_,i)=>lay[i]||0):defLayout(n,o0,0);
+  $('#strip').innerHTML=lay.map((v,i)=>`<button type="button" class="pcell p${v}" data-i="${i}" aria-label="Panel ${i+1}"><span>${i+1}</span><i>${['','Salida','Vidrio'][v]}</i></button>`).reverse().join('');$('#strip').scrollLeft=$('#strip').scrollWidth;
+  const pitch=cfg.L/n,oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0);
+  $('#pinfo').textContent=oi.length?'Salidas a '+oi.map(i=>Math.round((i+0.5)*pitch).toLocaleString('es-AR')+' mm').join(', ')+' del frente (centro de cada salida).':'Sin salidas en el lateral.';
+  history.replaceState(null,'','#'+new URLSearchParams({...cfg,p:lay.join('')}).toString());
   $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
-  const g=buildRobot({L:cfg.L,H:cfg.H,outs:cfg.o},cfg.c,{glass:cfg.g});g.position.x=0;
+  const g=buildRobot({L:cfg.L,H:cfg.H,outs:oi.length},cfg.c,{layout:lay});g.position.x=0;
   const sc=new T.Scene();sc.add(g);
   try{const glb=await new Promise((ok,ko)=>new T.GLTFExporter().parse(sc,ok,ko,{binary:true}));
     if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(new Blob([glb],{type:'model/gltf-binary'}));$('#mv').src=url;$('#msg').textContent=''}
   catch(e){$('#msg').textContent='No se pudo generar el modelo: '+e.message}
 }
 document.querySelectorAll('.cfg select,.cfg input').forEach(e=>e.addEventListener('change',make));
+$('#strip').addEventListener('click',e=>{const b=e.target.closest('.pcell');if(!b)return;const i=+b.dataset.i;lay[i]=(lay[i]+1)%3;make()});
 $('#mv').addEventListener('ar-status',e=>{if(e.detail.status==='failed')$('#msg').textContent='Este celular no pudo abrir la realidad aumentada. En Android instalá o actualizá "Servicios de Google Play para RA" y usá Chrome.'});
 make();
 }
