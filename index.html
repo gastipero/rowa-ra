@@ -16,6 +16,8 @@ ol{padding-left:20px}
 .xrgo{display:block;width:100%;margin:12px 0 4px;background:var(--navy);color:#fff;border:0;border-radius:12px;padding:15px;font:700 16px Montserrat,sans-serif}
 #xro{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none;font-family:Montserrat,sans-serif}
 #xro[hidden]{display:none}
+#xTouch{position:fixed;inset:0;pointer-events:auto;touch-action:none;z-index:0}
+.xtop,.xbot{position:relative;z-index:1}
 .xtop{display:flex;gap:8px;align-items:flex-start;padding:max(12px,env(safe-area-inset-top)) 12px 0}
 .xtop p{flex:1;margin:0;background:rgba(29,29,27,.78);color:#fff;border-radius:10px;padding:10px 12px;font-size:14px;font-weight:600}
 .xbot{padding:0 12px max(14px,env(safe-area-inset-bottom));display:grid;gap:8px}
@@ -62,6 +64,7 @@ ol{padding-left:20px}
 <p class="note">Frente de carga, salidas y vidrios ilustrativos. Las medidas son las de la cotización. Generado por la Calculadora de capacidad BD Rowa de Automatiza.</p>
 </main>
 <div id="xro" hidden>
+  <div id="xTouch"></div>
   <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xShot" class="xb" aria-label="Sacar foto">📷</button><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
   <div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
   <div class="xbot">
@@ -193,7 +196,7 @@ make();
 // ===== modo preciso (WebXR, Android): el robot se apoya siempre en el piso marcado =====
 const xr=navigator.xr;
 if(xr&&xr.isSessionSupported)xr.isSessionSupported('immersive-ar').then(ok=>{if(ok){$('#xrGo').hidden=false;
-  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Ajustá con las flechas y el giro. "Transparente" sirve para ver lo que queda detrás.</li><li>📷 saca una foto con el robot. Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
+  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Un dedo arrastra el robot sobre el piso y dos dedos lo giran. Las flechas sirven para el ajuste fino. "Transparente" sirve para ver lo que queda detrás.</li><li>📷 saca una foto con el robot. Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
 let XS=null;
 $('#xrGo').addEventListener('click',()=>startXR().catch(e=>{$('#xro').hidden=true;try{XS&&XS.session.end()}catch(x){}$('#msg').textContent='No se pudo iniciar el modo preciso: '+(e&&e.message||e)+'. Probá con "Ver en mi espacio con la cámara".';$('#msg').scrollIntoView({block:'center'})}));
 async function startXR(){
@@ -218,7 +221,7 @@ async function startXR(){
   ov.addEventListener('beforexrselect',e=>e.preventDefault());
   $('#xFloor').onclick=()=>{if(!lastHit){say('Todavía no encontré el piso: mové el celular despacio apuntando al suelo.');return}floorY=lastHit.y;phase='place';bars();shadow.position.y=floorY;shadow.visible=true;robot.visible=true;say('Apuntá adonde va el robot y tocá "Colocar acá". La huella se mueve siempre sobre el piso.')};
   $('#xRefloor').onclick=()=>{phase='floor';robot.visible=false;bars();say('Apuntá al piso libre y tocá "Este es el piso".')};
-  $('#xPlace').onclick=()=>{phase='edit';bars();ring.visible=false;say('Listo. Ajustá con las flechas y el giro. Para moverlo lejos, tocá "Mover de nuevo".')};
+  $('#xPlace').onclick=()=>{phase='edit';bars();ring.visible=false;say('Listo. Un dedo lo mueve sobre el piso, dos dedos lo giran. Las flechas sirven para el ajuste fino.')};
   $('#xMove').onclick=()=>{phase='place';bars();say('Apuntá adonde va el robot y tocá "Colocar acá".')};
   $('#xStep').onclick=()=>{step=step===0.1?0.02:step===0.02?0.5:0.1;$('#xStep').textContent=step===0.1?'Paso: 10 cm / 5°':step===0.02?'Paso: 2 cm / 1°':'Paso: 50 cm / 15°'};
   $('#xGhost').onclick=()=>{ghost=!ghost;$('#xGhost').textContent='Transparente: '+(ghost?'sí':'no');robot.traverse(m=>{if(m.isMesh){m.material.transparent=ghost||m.userData.tr;m.material.opacity=ghost?Math.min(m.userData.op,0.45):m.userData.op;m.material.needsUpdate=true}})};
@@ -252,6 +255,19 @@ async function startXR(){
     catch(e){say('Este celular no deja sacar la foto desde la página ('+e.message+'). Tocá "Ocultar" y hacé una captura de pantalla (power + bajar volumen), o grabá la pantalla para video.')}}
   session.addEventListener('end',()=>{R.setAnimationLoop(null);R.domElement.remove();R.dispose();ov.hidden=true;XS=null});
   const ray=new T.Raycaster(),hit=new T.Vector3(),pl=new T.Plane(new T.Vector3(0,1,0),0);
+  // gestos: 1 dedo mueve el robot sobre el piso, 2 dedos lo giran
+  const TL=$('#xTouch'),pts=new Map(),vc=new T.PerspectiveCamera();let grab=null,twist=null;
+  function floorAt(x,y){const c=R.xr.getCamera(),v=c.cameras&&c.cameras[0]||c;vc.matrixWorld.copy(v.matrixWorld);vc.projectionMatrix.copy(v.projectionMatrix);vc.projectionMatrixInverse.copy(v.projectionMatrix).invert();
+    const r=new T.Raycaster();r.setFromCamera({x:x/innerWidth*2-1,y:-(y/innerHeight)*2+1},vc);pl.constant=-floorY;const p=new T.Vector3();return r.ray.intersectPlane(pl,p)?p:null}
+  const ang=()=>{const [a,b]=[...pts.values()];return Math.atan2(b.y-a.y,b.x-a.x)};
+  TL.addEventListener('pointerdown',e=>{if(phase==='floor'||floorY==null)return;TL.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(phase==='place'){phase='edit';bars();ring.visible=false;say('Robot colocado. Un dedo lo mueve, dos dedos lo giran.')}
+    if(pts.size===1){grab=floorAt(e.clientX,e.clientY);twist=null}else if(pts.size===2){grab=null;twist={a:ang(),r:robot.rotation.y}}});
+  TL.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size>=2&&twist){robot.rotation.y=twist.r-(ang()-twist.a);return}
+    if(pts.size===1&&grab){const p=floorAt(e.clientX,e.clientY);if(p&&p.distanceTo(grab)<3){robot.position.x+=p.x-grab.x;robot.position.z+=p.z-grab.z;grab=p}}});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size===1){const q=[...pts.values()][0];grab=floorAt(q.x,q.y);twist=null}else if(!pts.size){grab=null;twist=null}};
+  TL.addEventListener('pointerup',up);TL.addEventListener('pointercancel',up);
   R.setAnimationLoop((t,frame)=>{
     if(wantShot&&frame)shoot(frame);
     if(frame){const rs=frame.getHitTestResults(hts);
