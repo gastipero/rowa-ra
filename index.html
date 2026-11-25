@@ -38,7 +38,7 @@ ol{padding-left:20px}
 .pwrap{display:flex;align-items:center;gap:6px;margin-top:6px}.pend{font-size:12px;color:#5d6080}
 .pstrip{display:flex;gap:3px;overflow-x:auto;flex:1;padding:2px}
 .pcell{flex:1 0 32px;min-height:52px;border:1px solid #d9dbe8;border-radius:6px;background:#fff;font:600 12px Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1d1d1b;padding:2px}
-.pcell i{font-style:normal;font-size:10px}.pcell.p1{background:#1d1d1b;color:#fff}.pcell.p2{background:#86cde0}
+.pcell i{font-style:normal;font-size:10px}.pcell.p1{background:#1d1d1b;color:#fff}.pcell.p2{background:#86cde0}.pcell.p3{background:linear-gradient(#86cde0 0 55%,#1d1d1b 55%)}.pcell.p3 i{color:#fff}
 </style></head><body>
 <header><b>AUTOMATIZA</b><h1>Robot BD Rowa en realidad aumentada</h1></header>
 <main>
@@ -55,11 +55,12 @@ ol{padding-left:20px}
   <label id="la">Brazos<select id="a"><option value="1">1 brazo</option><option value="2">2 brazos</option></select></label>
   <label>Ver por dentro<select id="v"><option value="0">No</option><option value="1">Sí, con los brazos en movimiento</option></select></label>
   <label id="ld">Distancia mostrador–robot<select id="d"></select></label>
+  <label id="le">Espirales<select id="e"><option value="0">Una por salida</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></label>
   <label id="lt">Altura del techo<select id="t"></select></label>
   <label id="lx" class="chkl"><span>Robot oculto</span><select id="x"><option value="1">Mostrar transparente</option><option value="0">No mostrar</option></select></label>
 </div>
 <p class="note" id="idesc"></p>
-<div class="panels"><b>Paneles del lateral</b> <span class="note">Tocá un panel: liso → salida → vidrio.</span>
+<div class="panels"><b>Paneles del lateral</b> <span class="note">Tocá un panel: liso → salida → vidrio → vidrio con salida.</span>
 <div class="pwrap"><span class="pend">Fondo</span><div class="pstrip" id="strip"></div><span class="pend">Frente</span></div><p class="note" id="pinfo"></p></div>
 <button class="xrgo" id="xrGo" hidden>Ubicar en el piso con la cámara (modo preciso)</button>
 <p class="note" id="msg"></p>
@@ -137,68 +138,87 @@ function buildRobot(c,col,o={}){
   const rw=W/2-z; if(rw>0.15)body.add(box(0.012,0.22,Math.min(0.26,rw-0.08),mk,xf,y0+mh*0.45,z+rw/2,false));
   // vidrios laterales y salidas sobre el lado +Z
   const pitch=L/n,lay=o.layout&&o.layout.length===n?o.layout:defLayout(n,c.outs||0,0);
-  const glassX=[],outX=[];lay.forEach((v,i)=>{const x=L/2-(i+0.5)*pitch;if(v===1)outX.push(x);if(v===2)glassX.push(x)});
+  const glassX=[],outX=[];lay.forEach((v,i)=>{const x=L/2-(i+0.5)*pitch;if(v===1||v===3)outX.push(x);if(v===2||v===3)glassX.push(x)});
   const gw=Math.max(0.3,pitch-0.14),gh=Math.max(0.8,H-0.6),tex=glassX.length?shelves():null;
-  glassX.forEach(x=>{body.add(box(gw+0.06,gh+0.06,0.012,mat(0xc4c9ce,{metalness:.5,roughness:.3}),x,0.3+gh/2,W/2+0.004,false));
-    const gl=new T.Mesh(new T.PlaneGeometry(gw,gh),new T.MeshStandardMaterial({map:tex,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:.35,roughness:.12,metalness:.1}));
+  const fm=mat(0xc4c9ce,{metalness:.5,roughness:.3});
+  glassX.forEach(x=>{const yc=0.3+gh/2,zf=W/2+0.006;body.add(box(gw+0.06,0.03,0.014,fm,x,yc+gh/2+0.015,zf,false));body.add(box(gw+0.06,0.03,0.014,fm,x,yc-gh/2-0.015,zf,false));
+    body.add(box(0.03,gh,0.014,fm,x-gw/2-0.015,yc,zf,false));body.add(box(0.03,gh,0.014,fm,x+gw/2+0.015,yc,zf,false));
+    const gl=new T.Mesh(new T.PlaneGeometry(gw,gh),o.interior?new T.MeshStandardMaterial({color:0xd8eef5,transparent:true,opacity:.15,roughness:.05,depthWrite:false}):new T.MeshStandardMaterial({map:tex,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:.35,roughness:.12,metalness:.1}));
     gl.position.set(x,0.3+gh/2,W/2+0.012);body.add(gl)});
   const outs=new T.Group();g.add(outs);g.userData.outs=outs;g.userData.outX=outX;
   if(o.outputs!==false)outX.forEach(x=>{const u=outUnit(col);u.position.set(x,o.outY||1.1,W/2);outs.add(u)});
-  if(o.interior){const it=buildInterior(L,H,outX,o.arms||1,o.outY||1.1,y0+mh*0.38);g.add(it.group);g.userData.clip=it.clip}
+  if(o.interior){const it=buildInterior(L,H,outX,o.arms||1,o.outY||1.1,y0+mh*0.38,o.spiral);g.add(it.group);g.userData.clip=it.clip}
   return g;
 }
-// interior: estanterías a ambos lados del pasillo y brazo(s) operador(es) animados
-function buildInterior(L,H,outX,arms,outY,inY){
+// interior: estanterías a ambos lados del pasillo y brazo(s) operador(es) animados.
+// Cada brazo corre por su propio riel (uno a la izquierda y otro a la derecha del pasillo),
+// toma la caja con una plataforma en voladizo y la lleva a la salida o a la espiral.
+function buildInterior(L,H,outX,arms,outY,inY,sp){
   const G=new T.Group(),tex=shelves().clone();tex.needsUpdate=true;tex.wrapS=T.RepeatWrapping;tex.repeat.set(Math.max(1,Math.round(L/0.6)),1);
   const sm=new T.MeshStandardMaterial({map:tex,roughness:.6});
-  {const p=new T.Mesh(new T.PlaneGeometry(L-0.5,H-0.3),sm);p.position.set(-0.1,0.15+(H-0.3)/2,-0.36);G.add(p)}
-  // lado cercano (+Z): solo los estantes, para ver el pasillo y los brazos
-  const bm=mat(0xc9ced4,{metalness:.3,roughness:.5});for(let y=0.3;y<H-0.2;y+=0.64)G.add(box(L-0.5,0.012,0.06,bm,-0.1,y,0.4,false));
-  for(let x=-L/2+0.4;x<L/2-0.3;x+=1.2)G.add(box(0.03,H-0.3,0.03,bm,x,0.15+(H-0.3)/2,0.36,false));
-  const rm=mat(0x9aa0a8,{metalness:.6,roughness:.3});G.add(box(L-0.3,0.05,0.12,rm,0,H-0.14,0,false));G.add(box(L-0.3,0.05,0.12,rm,0,0.1,0,false));
-  const tracks=[],DUR=36;let seed=11;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
-  const xMin=-L/2+0.45,xMax=L/2-0.45;
+  // cada estantería mira al pasillo: desde afuera siempre se ve la del lado opuesto (corte automático)
+  [1,-1].forEach(s=>{const p=new T.Mesh(new T.PlaneGeometry(L-0.5,H-0.3),sm);p.position.set(-0.1,0.15+(H-0.3)/2,s*0.4);p.rotation.y=s>0?Math.PI:0;G.add(p)});
+  const bm=mat(0xc9ced4,{metalness:.3,roughness:.5});
+  [1,-1].forEach(s=>{for(let x=-L/2+0.4;x<L/2-0.3;x+=1.2)G.add(box(0.03,H-0.3,0.03,bm,x,0.15+(H-0.3)/2,s*0.4,false))});
+  const tracks=[],DUR=40;let seed=11;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+  const xMin=-L/2+0.45,xMax=L/2-0.45,cols=[0xe4572e,0x4f86c6,0xf4d35e,0x76b041,0x8e7dbe];
   for(let a=0;a<arms;a++){
+    const zm=a===0?0.24:-0.24,toC=-Math.sign(zm),rm=mat(0x9aa0a8,{metalness:.6,roughness:.3});
+    G.add(box(L-0.3,0.05,0.08,rm,0,H-0.14,zm,false));G.add(box(L-0.3,0.05,0.08,rm,0,0.1,zm,false));
     const arm=new T.Group();arm.name='rowaArm'+a;G.add(arm);
-    const am=mat(a?0x5a6472:0x3d4550,{metalness:.4,roughness:.4}),acc=mat(0x2d5fd0,{emissive:0x2d5fd0,emissiveIntensity:.4});
-    arm.add(box(0.1,H-0.3,0.14,am,0,0.15+(H-0.3)/2,0));arm.add(box(0.3,0.1,0.2,am,0,H-0.16,0));arm.add(box(0.3,0.1,0.2,am,0,0.12,0));
+    const am=mat(a?0x5a6472:0x3d4550,{metalness:.4,roughness:.4}),cz=zm+toC*0.17;
+    arm.add(box(0.1,H-0.3,0.1,am,0,0.15+(H-0.3)/2,zm));arm.add(box(0.28,0.1,0.14,am,0,H-0.16,zm));arm.add(box(0.28,0.1,0.14,am,0,0.12,zm));
     const grip=new T.Group();grip.name='rowaGrip'+a;arm.add(grip);
-    grip.add(box(0.34,0.06,0.34,mat(0x2d5fd0,{roughness:.4}),0,0,0));grip.add(box(0.04,0.04,0.04,acc,0.15,0.05,0.15,false));
+    grip.add(box(0.36,0.05,0.34,mat(0x2d5fd0,{roughness:.4}),0,0,cz));grip.add(box(0.08,0.12,0.08,am,0,0.03,zm));
     const fork=new T.Group();fork.name='rowaFork'+a;grip.add(fork);
-    fork.add(box(0.03,0.14,0.22,mat(0xc9ced4,{metalness:.5}),-0.09,0.1,0.06));fork.add(box(0.03,0.14,0.22,mat(0xc9ced4,{metalness:.5}),0.09,0.1,0.06));
-    fork.add(box(0.12,0.08,0.1,mat(0xe9c46a),0,0.08,0.08));
-    // recorrido: entrada → estante (guardar) y estante → salida (despachar)
-    const lo=arms===2?(a===0?0:xMin+(xMax-xMin)*0.45):xMin,hi=arms===2?(a===0?xMax:xMin+(xMax-xMin)*0.55):xMax;
-    const zoneLo=arms===2&&a===0?xMin+(xMax-xMin)*0.45:lo,zoneHi=arms===2&&a===1?xMin+(xMax-xMin)*0.55:hi;
-    const tX=[],vX=[],tY=[],vY=[],tR=[],vR=[],tF=[],vF=[];let t=a*1.7,x=arms===2&&a===1?xMin+0.5:xMax-0.3,y=1.1,r=0;
-    const key=()=>{tX.push(t);vX.push(x,0,0);tY.push(t);vY.push(0,y,0);tR.push(t);vR.push(...new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),r).toArray());tF.push(t);vF.push(0,0,0)};
-    const ext=()=>{const t0=t;tF.push(t0+0.35,t0+0.7);vF.push(0,0,0.28,0,0,0);t+=0.9;tX.push(t);vX.push(x,0,0);tY.push(t);vY.push(0,y,0);tR.push(t);vR.push(...new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),r).toArray());tF.push(t);vF.push(0,0,0)};
-    const go=(nx,ny,nr)=>{const d=Math.max(Math.abs(nx-x)/1.6,Math.abs(ny-y)/1.2,0.6);t+=d;x=nx;y=ny;r=nr;key()};
-    key();
-    const outs=outX.filter(v=>v>=lo-0.4&&v<=hi+0.4);
-    while(t<DUR-5){const sx=zoneLo+rnd()*(zoneHi-zoneLo),sy=0.35+rnd()*(H-0.8),side=rnd()<0.5?0:Math.PI;
-      if(rnd()<0.5&&(a===0||arms===1)){go(xMax-0.05,inY,Math.PI/2);ext();go(sx,sy,side);ext()}
-      else{go(sx,sy,side);ext();const ox=outs.length?outs[Math.floor(rnd()*outs.length)]:xMax-0.05;go(ox,outY,ox===xMax-0.05?Math.PI/2:0);ext()}}
-    go(tX.length?vX[0]:x,vY[1],0);t=DUR;key();
-    const cut=(ts,vs,n)=>{const T2=[],V2=[];ts.forEach((tt,i)=>{if(tt<=DUR&&(!T2.length||tt>T2[T2.length-1])){T2.push(tt);V2.push(...vs.slice(i*n,i*n+n))}});return [T2,V2]};
-    const [a1,b1]=cut(tX,vX,3),[a2,b2]=cut(tY,vY,3),[a3,b3]=cut(tR,vR,4),[a4,b4]=cut(tF,vF,3);
-    tracks.push(new T.VectorKeyframeTrack(arm.name+'.position',a1,b1),new T.VectorKeyframeTrack(grip.name+'.position',a2,b2),new T.QuaternionKeyframeTrack(grip.name+'.quaternion',a3,b3),new T.VectorKeyframeTrack(fork.name+'.position',a4,b4));
+    const jm=mat(0xc9ced4,{metalness:.5});fork.add(box(0.02,0.1,0.26,jm,-0.1,0.07,cz));fork.add(box(0.02,0.1,0.26,jm,0.1,0.07,cz));
+    const pack=box(0.16,0.07,0.11,mat(cols[a%cols.length]),0,0.07,cz);pack.name='rowaPack'+a;fork.add(pack);
+    const disp=box(0.16,0.07,0.11,mat(cols[(a+2)%cols.length]),0,0,0);disp.name='rowaDisp'+a;G.add(disp);
+    const K={x:[[],[]],y:[[],[]],f:[[],[]],p:[[],[]],dp:[[],[]],ds:[[],[]]};
+    const push=(k,t,v)=>{const A=K[k];if(A[0].length&&t<=A[0][A[0].length-1])t=A[0][A[0].length-1]+0.001;A[0].push(t);A[1].push(...v)};
+    let t=a*2.3,x=a?xMin+0.4:xMax-0.3,y=a?1.6:1.1,f=[0,0,0],carry=0;
+    const S=v=>[v,v,v];
+    const all=()=>{push('x',t,[x,0,0]);push('y',t,[0,y,0]);push('f',t,f);push('p',t,S(carry))};
+    const go=(nx,ny)=>{const d=Math.max(Math.abs(nx-x)/1.5,Math.abs(ny-y)/1.1,0.5);all();t+=d;x=nx;y=ny;all()};
+    const reach=(v,take)=>{all();t+=0.35;f=v;all();t+=0.12;carry=take?1:0;all();t+=0.35;f=[0,0,0];all();t+=0.1};
+    push('ds',0,S(0));push('dp',0,[0,0,0]);
+    const outs=outX.length?outX:[xMax];
+    while(t<DUR-7){
+      const sx=xMin+rnd()*(xMax-xMin),sy=0.35+rnd()*(H-0.85),side=rnd()<0.5?1:-1,dz=side*0.4-cz;
+      if(a===0&&rnd()<0.45){go(xMax,inY);reach([0.22,0,0],true);go(sx,sy);reach([0,0,dz],false)}
+      else{go(sx,sy);reach([0,0,dz],true);const ox=outs[Math.floor(rnd()*outs.length)];
+        if(sp&&sp.xs.length){const sx2=sp.xs.reduce((b,v)=>Math.abs(v-ox)<Math.abs(b-ox)?v:b,sp.xs[0]);go(sx2,0.25);reach([0,0,sp.z-cz],false);
+          // la caja baja por la espiral hasta el mostrador
+          const t0=t-0.45,n=24,h=0.25-sp.yBot,turns=Math.max(1,h/0.55);push('ds',t0,S(1));
+          for(let i=0;i<=n;i++){const an=i/n*Math.PI*2*turns;push('dp',t0+i/n*1.8,[sx2+0.17*Math.cos(an),0.25-h*i/n,sp.z+0.17*Math.sin(an)])}
+          push('dp',t0+2.2,[sx2,sp.yBot+0.02,sp.z+0.25]);push('dp',t0+3.6,[sx2,sp.yBot+0.02,sp.z+0.25]);push('ds',t0+3.6,S(1));push('ds',t0+3.7,S(0))}
+        else{go(ox,outY);reach([0,0,W/2-0.1-cz],false);
+          // la caja sale por la boca de la salida
+          const t0=t-0.45;push('dp',t0-0.01,[ox,outY,W/2-0.05]);push('ds',t0,S(1));push('dp',t0+0.6,[ox,outY-0.06,W/2+0.26]);push('dp',t0+2.6,[ox,outY-0.06,W/2+0.26]);push('ds',t0+2.6,S(1));push('ds',t0+2.7,S(0))}}}
+    go(a?xMin+0.4:xMax-0.3,a?1.6:1.1);t=Math.max(t,DUR);all();
+    const trim=(k,n)=>{const [ts,vs]=K[k],T2=[],V2=[];ts.forEach((tt,i)=>{if(tt<=DUR){T2.push(tt);V2.push(...vs.slice(i*n,i*n+n))}});if(!T2.length){T2.push(0);V2.push(...vs.slice(0,n))}return [T2,V2]};
+    tracks.push(new T.VectorKeyframeTrack(arm.name+'.position',...trim('x',3)),new T.VectorKeyframeTrack(grip.name+'.position',...trim('y',3)),
+      new T.VectorKeyframeTrack(fork.name+'.position',...trim('f',3)),new T.VectorKeyframeTrack(pack.name+'.scale',...trim('p',3),T.InterpolateDiscrete),
+      new T.VectorKeyframeTrack(disp.name+'.position',...trim('dp',3)),new T.VectorKeyframeTrack(disp.name+'.scale',...trim('ds',3),T.InterpolateDiscrete));
   }
   return {group:G,clip:new T.AnimationClip('brazos',DUR,tracks)}}
 function ghostMat(){return new T.MeshStandardMaterial({color:0x6f8fd8,transparent:true,opacity:.22,depthWrite:false,roughness:.6})}
 function buildInstall(cfg,lay,nOut){
   const root=new T.Group(),L=cfg.L/1000,H=cfg.H/1000,mode=cfg.i,hc=0.9,dep=0.6,sep=cfg.d,ceil=Math.max(cfg.t,H+0.1);
-  const g=buildRobot({L:cfg.L,H:cfg.H,outs:nOut},cfg.c,{layout:lay,outputs:mode!=='techo',outY:mode==='pared'?hc+0.25:1.1,interior:!!cfg.v,arms:cfg.a});root.add(g);root.userData.clip=g.userData.clip;
+  const counterZ=mode==='techo'?W/2-0.3-dep/2+0.1:W/2+sep+dep/2,n=nPan(L),pitch=L/n;
+  const lx=lay.length===n?lay.map((v,i)=>v===1||v===3?L/2-(i+0.5)*pitch:null).filter(v=>v!==null):[];
+  const sxs=cfg.e?Array.from({length:cfg.e},(_,i)=>L*0.85*((i+0.5)/cfg.e-0.5)):(lx.length?lx:[L/2-0.6]);
+  const g=buildRobot({L:cfg.L,H:cfg.H,outs:nOut},cfg.c,{layout:lay,outputs:mode!=='techo',outY:mode==='pared'?hc+0.25:1.1,interior:!!cfg.v,arms:cfg.a,
+    spiral:mode==='techo'?{xs:sxs,z:counterZ-0.1,yBot:hc+0.05-ceil}:null});root.add(g);root.userData.clip=g.userData.clip;
   const hidden=mode==='pared'||mode==='techo';
   if(hidden&&!cfg.v){if(cfg.x)g.userData.body.traverse(m=>{if(m.isMesh){m.material=ghostMat();m.castShadow=false}});else g.userData.body.visible=false}
   if(mode==='techo')g.position.y=ceil;
   // mostrador delante del lado de las salidas (+Z)
-  const counterZ=mode==='techo'?W/2-0.3-dep/2+0.1:W/2+sep+dep/2;
   if(mode!=='vista'){const cm=mat(0xe4ded4,{roughness:.7}),tm=mat(0x7a6e62,{roughness:.5}),cg=new T.Group();
     cg.add(box(L+0.4,hc-0.04,dep,cm,0,(hc-0.04)/2,0));cg.add(box(L+0.5,0.04,dep+0.06,tm,0,hc-0.02,0));cg.position.z=counterZ;root.add(cg)}
   if(mode==='pared'){const wm=mat(0xf3f1ec,{roughness:.9});const wh=Math.max(ceil,H+0.2);
     const zW=W/2+0.02;root.add(box(L+1.2,wh,0.04,wm,0,wh/2,zW))}
-  if(mode==='techo'){const xs=g.userData.outX.length?g.userData.outX:[L/2-0.6];
+  if(mode==='techo'){const xs=sxs;
     xs.forEach(x=>{const s=spiral(hc+0.05,ceil);s.position.set(x,0,counterZ-0.1);root.add(s)});
     const sl=mat(0xf3f1ec,{roughness:.9,transparent:true,opacity:.35,depthWrite:false});root.add(box(L+1.2,0.05,W+1.2,sl,0,ceil-0.03,0))}
   // huella en el piso: ancla el modelo al piso y marca el lugar del robot
@@ -214,21 +234,21 @@ const P=new URLSearchParams(location.hash.slice(1));
 const opt=(id,a,f)=>{$('#'+id).innerHTML=a.map(v=>`<option value="${v}">${f(v)}</option>`).join('')};
 opt('d',[0.6,0.8,1,1.2,1.4,1.6,1.8,2,2.5,3],v=>v.toFixed(1).replace('.',',')+' m');
 opt('t',[2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4],v=>v.toFixed(1).replace('.',',')+' m');
-const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',i:P.get('i')||'vista',d:+P.get('d')||1.2,t:+P.get('t')||3,x:P.has('x')?+P.get('x'):1,a:+P.get('a')===2?2:1,v:+P.get('v')?1:0};
+const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',i:P.get('i')||'vista',d:+P.get('d')||1.2,t:+P.get('t')||3,x:P.has('x')?+P.get('x'):1,a:+P.get('a')===2?2:1,v:+P.get('v')?1:0,e:Math.min(8,Math.max(0,+P.get('e')||0))};
 if(!['vista','mostrador','pared','techo'].includes(cfg.i))cfg.i='vista';
-let lay=(P.get('p')||'').split('').map(Number).filter(v=>v>=0&&v<=2);const o0=P.has('o')?+P.get('o'):2;
-cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','i','d','t','x','a','v'])$('#'+k).value=String(cfg[k]);
+let lay=(P.get('p')||'').split('').map(Number).filter(v=>v>=0&&v<=3);const o0=P.has('o')?+P.get('o'):2;
+cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','i','d','t','x','a','v','e'])$('#'+k).value=String(cfg[k]);
 for(const k of ['d','t']){const sel=$('#'+k);if(!sel.value){const vs=[...sel.options].map(o=>+o.value);sel.value=String(near(vs,cfg[k]))}}
 $('#m').addEventListener('change',()=>fill($('#m').value,+$('#L').value,+$('#H').value));
 let url=null;
 async function make(){
   for(const k in cfg)cfg[k]=['m','c','i'].includes(k)?$('#'+k).value:+$('#'+k).value;
   if(cfg.m==='smart')cfg.a=1;$('#la').hidden=cfg.m==='smart';
-  $('#ld').hidden=cfg.i==='vista';$('#lt').hidden=cfg.i!=='techo';$('#lx').hidden=!['pared','techo'].includes(cfg.i);
+  $('#ld').hidden=cfg.i==='vista';$('#lt').hidden=cfg.i!=='techo';$('#le').hidden=cfg.i!=='techo';$('#lx').hidden=!['pared','techo'].includes(cfg.i);
   $('#idesc').textContent={vista:'El robot queda apoyado en el piso, a la vista.',mostrador:'Se agrega un mostrador de 0,90 m delante del robot, del lado de las salidas.',pared:'Se dibuja una pared delante del robot con las salidas directas a la altura de la mesada, y el mostrador delante. El robot queda detrás de la pared.',techo:'El robot queda arriba, a la altura del techo, y bajan espirales desde cada salida hasta el mostrador. En la cámara el techo real no lo tapa: usá "Robot oculto" para verlo transparente o esconderlo.'}[cfg.i];
   const n=nPan(cfg.L/1000);if(lay.length!==n)lay=lay.length?Array.from({length:n},(_,i)=>lay[i]||0):defLayout(n,o0,0);
-  $('#strip').innerHTML=lay.map((v,i)=>`<button type="button" class="pcell p${v}" data-i="${i}" aria-label="Panel ${i+1}"><span>${i+1}</span><i>${['','Salida','Vidrio'][v]}</i></button>`).reverse().join('');$('#strip').scrollLeft=$('#strip').scrollWidth;
-  const pitch=cfg.L/n,oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0);
+  $('#strip').innerHTML=lay.map((v,i)=>`<button type="button" class="pcell p${v}" data-i="${i}" aria-label="Panel ${i+1}"><span>${i+1}</span><i>${['','Salida','Vidrio','Vidrio + salida'][v]}</i></button>`).reverse().join('');$('#strip').scrollLeft=$('#strip').scrollWidth;
+  const pitch=cfg.L/n,oi=lay.map((v,i)=>v===1||v===3?i:-1).filter(i=>i>=0);
   $('#pinfo').textContent=oi.length?'Salidas a '+oi.map(i=>Math.round((i+0.5)*pitch).toLocaleString('es-AR')+' mm').join(', ')+' del frente (centro de cada salida).':'Sin salidas en el lateral.';
   history.replaceState(null,'','#'+new URLSearchParams({...cfg,p:lay.join('')}).toString());
   $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
@@ -239,7 +259,7 @@ async function make(){
   catch(e){$('#msg').textContent='No se pudo generar el modelo: '+e.message}
 }
 document.querySelectorAll('.cfg select,.cfg input').forEach(e=>e.addEventListener('change',make));
-$('#strip').addEventListener('click',e=>{const b=e.target.closest('.pcell');if(!b)return;const i=+b.dataset.i;lay[i]=(lay[i]+1)%3;make()});
+$('#strip').addEventListener('click',e=>{const b=e.target.closest('.pcell');if(!b)return;const i=+b.dataset.i;lay[i]=(lay[i]+1)%4;make()});
 $('#mv').addEventListener('ar-status',e=>{if(e.detail.status==='failed')$('#msg').textContent='Este celular no pudo abrir la realidad aumentada. En Android instalá o actualizá "Servicios de Google Play para RA" y usá Chrome.'});
 make();
 // ===== modo preciso (WebXR, Android): el robot se apoya siempre en el piso marcado =====
