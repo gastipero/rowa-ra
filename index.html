@@ -22,8 +22,8 @@ ol{padding-left:20px}
 <p class="dims" id="dims"></p>
 <div class="cfg">
   <label>Modelo<select id="m"><option value="vmax">VMAX 160</option><option value="smart">Smart</option></select></label>
-  <label>Largo (mm)<input id="L" type="number" min="2600" max="15200" step="10"></label>
-  <label>Alto (mm)<input id="H" type="number" min="1700" max="3520" step="10"></label>
+  <label>Largo<select id="L"></select></label>
+  <label>Alto<select id="H"></select></label>
   <label>Color<select id="c"><option value="white">Blanco</option><option value="anth">Antracita</option></select></label>
   <label>Salidas<input id="o" type="number" min="0" max="12" step="1"></label>
   <label>Vidrios laterales<select id="g"><option>0</option><option>1</option><option>2</option><option>3</option></select></label>
@@ -98,13 +98,19 @@ function buildRobot(c,col,o={}){
   return g;
 }
 
+const VL=[2614,3095,3575,4056,4536,5017,5497,5978,6458,6939,7419,7900,8380,8861,9341,9822,10302,10783,11263,11744,12224,12705,13185,13666,14146,14627,15107].map(c=>Math.round((c+62)/10)*10);
+const VH=Array.from({length:37},(_,i)=>1720+i*50);
+const SIZES={vmax:{L:VL,H:VH},smart:{L:[3280,3580,4060,4540,5020,5500,5980,6460],H:[2320,2520,2820]}};
+const near=(a,v)=>a.reduce((b,x)=>Math.abs(x-v)<Math.abs(b-v)?x:b,a[0]);
+function fill(m,L,H){for(const k of ['L','H']){const sel=$('#'+k),list=SIZES[m][k],v=near(list,k==='L'?L:H);
+  sel.innerHTML=list.map(x=>`<option value="${x}">${x.toLocaleString('es-AR')} mm</option>`).join('');sel.value=String(v)}}
 const P=new URLSearchParams(location.hash.slice(1));
 const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',o:P.has('o')?+P.get('o'):2,g:+P.get('g')||0};
-for(const k in cfg)$('#'+k).value=cfg[k];
+cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','o','g'])$('#'+k).value=cfg[k];
+$('#m').addEventListener('change',()=>fill($('#m').value,+$('#L').value,+$('#H').value));
 let url=null;
 async function make(){
   for(const k in cfg)cfg[k]=['m','c'].includes(k)?$('#'+k).value:+$('#'+k).value;
-  cfg.L=Math.max(2600,Math.min(15200,cfg.L||8440));cfg.H=Math.max(1700,Math.min(3520,cfg.H||2620));
   history.replaceState(null,'','#'+new URLSearchParams(cfg).toString());
   $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
   const g=buildRobot({L:cfg.L,H:cfg.H,outs:cfg.o},cfg.c,{glass:cfg.g});g.position.x=0;
