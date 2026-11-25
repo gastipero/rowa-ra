@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Robot BD Rowa en realidad aumentada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#2d3173;--lila:#ba5d9e;--celeste:#86cde0;--ink:#1d1d1b}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 Montserrat,system-ui,sans-serif;color:var(--ink);background:#f5f5fa}
+header{background:var(--navy);color:#fff;padding:14px 18px}header b{font-size:12px;letter-spacing:.12em;opacity:.85}header h1{margin:2px 0 0;font-size:20px}
+main{max-width:900px;margin:0 auto;padding:14px}
+model-viewer{width:100%;height:min(62vh,560px);background:linear-gradient(#eef1f5,#d9dee5);border-radius:14px;--poster-color:transparent}
+.ar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:var(--lila);color:#fff;border:0;border-radius:999px;padding:14px 22px;font:700 16px Montserrat,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.cfg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:14px 0}
+label{display:grid;gap:4px;font-size:13px;color:#5d6080}select,input{font:600 16px Montserrat,sans-serif;padding:9px;border:1px solid #d9dbe8;border-radius:8px;background:#fff;min-height:44px}
+.dims{font-weight:700;font-size:17px;margin:10px 0}.note{font-size:13px;color:#5d6080}
+ol{padding-left:20px}
+</style></head><body>
+<header><b>AUTOMATIZA</b><h1>Robot BD Rowa en realidad aumentada</h1></header>
+<main>
+<model-viewer id="mv" camera-controls camera-orbit="40deg 72deg auto" touch-action="pan-y" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed" ar-placement="floor" alt="Modelo 3D del robot BD Rowa a escala real">
+  <button slot="ar-button" class="ar">Ver en mi espacio con la cámara</button>
+</model-viewer>
+<p class="dims" id="dims"></p>
+<div class="cfg">
+  <label>Modelo<select id="m"><option value="vmax">VMAX 160</option><option value="smart">Smart</option></select></label>
+  <label>Largo (mm)<input id="L" type="number" min="2600" max="15200" step="10"></label>
+  <label>Alto (mm)<input id="H" type="number" min="1700" max="3520" step="10"></label>
+  <label>Color<select id="c"><option value="white">Blanco</option><option value="anth">Antracita</option></select></label>
+  <label>Salidas<input id="o" type="number" min="0" max="12" step="1"></label>
+  <label>Vidrios laterales<select id="g"><option>0</option><option>1</option><option>2</option><option>3</option></select></label>
+</div>
+<p class="note" id="msg"></p>
+<ol class="note">
+  <li>Tocá "Ver en mi espacio con la cámara" y apuntá al piso, moviendo el celular despacio hasta que aparezca el robot.</li>
+  <li>El robot aparece en tamaño real. Arrastralo con un dedo para moverlo y girálo con dos.</li>
+  <li>Android necesita Chrome y los "Servicios de Google Play para RA" (ARCore). En iPhone y iPad se abre con Safari.</li>
+</ol>
+<p class="note">Frente de carga, salidas y vidrios ilustrativos. Las medidas son las de la cotización. Generado por la Calculadora de capacidad BD Rowa de Automatiza.</p>
+</main>
+<script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/exporters/GLTFExporter.js"></script>
+<script>
+{
+const T=THREE,W=1.63,$=s=>document.querySelector(s);
+const PAL={white:{body:0xeef0f3,seam:0xbfc4ca,mod:0x3b3e43,plinth:0xb4b9bf,house:0xf4f5f7},anth:{body:0x2f3237,seam:0x232528,mod:0x24262a,plinth:0x1f2124,house:0x3a3d42}};
+const mat=(c,o={})=>new T.MeshStandardMaterial(Object.assign({color:c,roughness:.55,metalness:.05},o));
+function box(w,h,d,m,x,y,z,shadow=true){const b=new T.Mesh(new T.BoxGeometry(w,h,d),m);b.position.set(x,y,z);b.castShadow=shadow;b.receiveShadow=true;return b}
+// estanterías vistas a través del vidrio (textura generada)
+let shelfTex=null;
+function shelves(){if(shelfTex)return shelfTex;const c=document.createElement('canvas');c.width=256;c.height=512;const x=c.getContext('2d');
+  x.fillStyle='#2b3036';x.fillRect(0,0,256,512);let s=7;const r=()=>(s=(s*16807)%2147483647)/2147483647;
+  const cols=['#e9eef3','#f4d35e','#4f86c6','#e4572e','#ffffff','#76b041','#c9cfd6','#8e7dbe','#f2a65a','#ffffff'];
+  for(let y=8;y<512;y+=26){x.fillStyle='rgba(200,230,240,.55)';x.fillRect(0,y+20,256,2);let px=2;while(px<250){const w=6+r()*16,h=8+r()*11;x.fillStyle=cols[Math.floor(r()*cols.length)];x.fillRect(px,y+20-h,w,h);px+=w+1+r()*2}}
+  shelfTex=new T.CanvasTexture(c);shelfTex.encoding=T.sRGBEncoding;return shelfTex}
+// salida directa: caja con boca inclinada negra (como en las fotos de instalaciones)
+function outUnit(col){const g=new T.Group(),P=PAL[col];
+  const mh=mat(P.house,{roughness:.4}),mk=mat(0x0d0e10,{roughness:.35});
+  g.add(box(0.42,0.08,0.30,mh,0,-0.13,0.15));
+  g.add(box(0.03,0.30,0.30,mh,-0.195,0,0.15));g.add(box(0.03,0.30,0.30,mh,0.195,0,0.15));
+  const hood=box(0.42,0.03,0.22,mh,0,0.16,0.11);g.add(hood);
+  const tray=box(0.36,0.02,0.30,mk,0,-0.02,0.16);tray.rotation.x=0.42;g.add(tray);
+  g.add(box(0.36,0.24,0.01,mk,0,0,0.005,false));return g}
+function spiral(y0,y1){const g=new T.Group(),m=mat(0x8b9198,{metalness:.55,roughness:.35});const h=y1-y0,turns=Math.max(1,h/0.55);
+  const pts=[];for(let i=0;i<=turns*48;i++){const a=i/48*Math.PI*2;pts.push(new T.Vector3(0.17*Math.cos(a),y1-h*i/(turns*48),0.17*Math.sin(a)))}
+  const t=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts),Math.ceil(turns*48),0.055,8,false),m);t.castShadow=true;g.add(t);
+  g.add(box(0.05,h,0.05,m,0,y0+h/2,0));
+  const tr=box(0.34,0.03,0.32,mat(0x15171a),0,y0+0.02,0.2);g.add(tr);return g}
+function buildRobot(c,col,o={}){
+  const P=PAL[col],g=new T.Group(),L=c.L/1000,H=c.H/1000,body=new T.Group();g.add(body);g.userData.body=body;
+  const mb=mat(P.body,{roughness:.45}),ms=mat(P.seam),mm=mat(P.mod,{roughness:.4}),mp=mat(P.plinth),mk=mat(0x0c0d10,{roughness:.2,metalness:.3});
+  body.add(box(L,H-0.05,W,mb,0,0.05+(H-0.05)/2,0));
+  body.add(box(L-0.02,0.05,W-0.02,mp,0,0.025,0));
+  const n=Math.max(2,Math.round(L/0.72));
+  for(let i=1;i<n;i++){const x=-L/2+i*L/n;[1,-1].forEach(s=>body.add(box(0.008,H-0.12,0.004,ms,x,0.05+(H-0.05)/2,s*(W/2+0.002),false)))}
+  // frente de carga (lado corto +X): franja oscura con pantalla, vidrio y boca de salida
+  const y0=Math.min(0.85,H*0.33),y1=Math.min(y0+0.95,H-0.25),mh=y1-y0,xf=L/2+0.062;
+  body.add(box(0.06,mh,W,mm,L/2+0.03,y0+mh/2,0));
+  let z=-W/2+0.1;
+  body.add(box(0.008,0.3,0.38,mat(0xe9eef7,{emissive:0x223355,emissiveIntensity:.15}),xf,y0+mh*0.66,z+0.19,false));
+  body.add(box(0.009,0.26,0.12,mat(0x2d5fd0),xf+0.001,y0+mh*0.66,z+0.08,false));
+  body.add(box(0.2,0.02,0.44,mat(0x2a2c30),xf+0.1,y0+mh*0.38,z+0.2));
+  z+=0.38+0.1;
+  body.add(box(0.008,mh*0.86,0.55,mat(0x16181b,{roughness:.15,metalness:.3,emissive:0x1b2026,emissiveIntensity:.4}),xf,y0+mh/2,z+0.275,false));
+  z+=0.55+0.08;
+  const rw=W/2-z; if(rw>0.15)body.add(box(0.012,0.22,Math.min(0.26,rw-0.08),mk,xf,y0+mh*0.45,z+rw/2,false));
+  // vidrios laterales y salidas sobre el lado +Z
+  const gN=o.glass||0,no=Math.max(0,c.outs||0),slots=[];
+  for(let x=L/2-0.55;x>-L/2+0.4;x-=0.72)slots.push(x);
+  const glassX=[],outX=[];let si=0;
+  for(let i=0;i<gN&&si<slots.length;i++){glassX.push(slots[si]);si+= (i<no?2:1)}
+  for(let i=0;i<no;i++){const free=slots.filter(x=>!glassX.includes(x)&&!outX.includes(x));const pick=glassX.length&&i<glassX.length?slots[slots.indexOf(glassX[i])+1]:free[0];if(pick===undefined)break;outX.push(pick)}
+  const gw=0.6,gh=Math.max(0.8,H-0.6),tex=gN?shelves():null;
+  glassX.forEach(x=>{body.add(box(gw+0.06,gh+0.06,0.012,mat(0xc4c9ce,{metalness:.5,roughness:.3}),x,0.3+gh/2,W/2+0.004,false));
+    const gl=new T.Mesh(new T.PlaneGeometry(gw,gh),new T.MeshStandardMaterial({map:tex,emissive:0xffffff,emissiveMap:tex,emissiveIntensity:.35,roughness:.12,metalness:.1}));
+    gl.position.set(x,0.3+gh/2,W/2+0.012);body.add(gl)});
+  const outs=new T.Group();g.add(outs);g.userData.outs=outs;g.userData.outX=outX;
+  if(o.outputs!==false)outX.forEach(x=>{const u=outUnit(col);u.position.set(x,o.outY||1.1,W/2);outs.add(u)});
+  return g;
+}
+
+const P=new URLSearchParams(location.hash.slice(1));
+const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',o:P.has('o')?+P.get('o'):2,g:+P.get('g')||0};
+for(const k in cfg)$('#'+k).value=cfg[k];
+let url=null;
+async function make(){
+  for(const k in cfg)cfg[k]=['m','c'].includes(k)?$('#'+k).value:+$('#'+k).value;
+  cfg.L=Math.max(2600,Math.min(15200,cfg.L||8440));cfg.H=Math.max(1700,Math.min(3520,cfg.H||2620));
+  history.replaceState(null,'','#'+new URLSearchParams(cfg).toString());
+  $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
+  const g=buildRobot({L:cfg.L,H:cfg.H,outs:cfg.o},cfg.c,{glass:cfg.g});g.position.x=0;
+  const sc=new T.Scene();sc.add(g);
+  try{const glb=await new Promise((ok,ko)=>new T.GLTFExporter().parse(sc,ok,ko,{binary:true}));
+    if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(new Blob([glb],{type:'model/gltf-binary'}));$('#mv').src=url;$('#msg').textContent=''}
+  catch(e){$('#msg').textContent='No se pudo generar el modelo: '+e.message}
+}
+document.querySelectorAll('.cfg select,.cfg input').forEach(e=>e.addEventListener('change',make));
+$('#mv').addEventListener('ar-status',e=>{if(e.detail.status==='failed')$('#msg').textContent='Este celular no pudo abrir la realidad aumentada. En Android instalá o actualizá "Servicios de Google Play para RA" y usá Chrome.'});
+make();
+}
+</script>
+</body></html>
