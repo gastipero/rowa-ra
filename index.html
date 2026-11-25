@@ -27,6 +27,9 @@ ol{padding-left:20px}
 .xpad{display:grid!important;grid-template-columns:repeat(6,52px);justify-content:center}
 .xrow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 #xro.clean .xtop,#xro.clean .xbot{visibility:hidden}
+.xshut{display:flex;justify-content:center;padding-top:4px}
+#xShot{pointer-events:auto;width:74px;height:74px;border-radius:50%;background:#fff;border:6px solid rgba(255,255,255,.45);background-clip:padding-box;box-shadow:0 0 0 3px rgba(0,0,0,.25)}
+#xShot:active{transform:scale(.92)}
 #xShow{position:fixed;right:10px;bottom:max(10px,env(safe-area-inset-bottom));opacity:.55}
 #xFlash{position:fixed;inset:0;background:#fff;opacity:.7;pointer-events:none}
 [hidden]{display:none!important}
@@ -65,7 +68,7 @@ ol{padding-left:20px}
 </main>
 <div id="xro" hidden>
   <div id="xTouch"></div>
-  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xShot" class="xb" aria-label="Sacar foto">📷</button><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
+  <div class="xtop"><p id="xmsg">Apuntá al piso libre y mové el celular despacio.</p><button id="xHide" class="xb">Ocultar</button><button id="xExit" class="xb">Salir</button></div>
   <div id="xFlash" hidden></div><button id="xShow" class="xb" hidden>Mostrar botones</button>
   <div class="xbot">
     <div id="xFloorBar"><button id="xFloor" class="xb big">Este es el piso</button></div>
@@ -74,6 +77,7 @@ ol{padding-left:20px}
       <div class="xpad"><button class="xb" data-m="l" aria-label="Izquierda">◀</button><button class="xb" data-m="f" aria-label="Alejar">▲</button><button class="xb" data-m="b" aria-label="Acercar">▼</button><button class="xb" data-m="r" aria-label="Derecha">▶</button><button class="xb" data-m="rl" aria-label="Girar a la izquierda">⟲</button><button class="xb" data-m="rr" aria-label="Girar a la derecha">⟳</button></div>
       <div class="xrow"><button class="xb" id="xStep">Paso: 10 cm / 5°</button><button class="xb" id="xGhost">Transparente: no</button><button class="xb" id="xMove">Mover de nuevo</button></div>
     </div>
+    <div class="xshut"><button id="xShot" aria-label="Sacar foto"></button></div>
   </div>
 </div>
 <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
@@ -196,7 +200,7 @@ make();
 // ===== modo preciso (WebXR, Android): el robot se apoya siempre en el piso marcado =====
 const xr=navigator.xr;
 if(xr&&xr.isSessionSupported)xr.isSessionSupported('immersive-ar').then(ok=>{if(ok){$('#xrGo').hidden=false;
-  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Un dedo arrastra el robot sobre el piso y dos dedos lo giran. Las flechas sirven para el ajuste fino. "Transparente" sirve para ver lo que queda detrás.</li><li>📷 saca una foto con el robot. Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
+  $('#steps').innerHTML='<li>Tocá "Ubicar en el piso con la cámara" y apuntá a una zona de piso libre, lejos del mostrador. Cuando el círculo quede apoyado en el piso, tocá "Este es el piso".</li><li>Apuntá adonde va el robot: su huella se desliza siempre sobre el piso, aunque haya un mostrador en el medio. Tocá "Colocar acá".</li><li>Un dedo arrastra el robot sobre el piso y dos dedos lo giran. Las flechas sirven para el ajuste fino. "Transparente" sirve para ver lo que queda detrás.</li><li>El botón redondo de abajo saca una foto con el robot y la guarda en la galería (álbum Descargas). Para video, tocá "Ocultar" y usá la grabación de pantalla del celular.</li>'}}).catch(()=>{});
 let XS=null;
 $('#xrGo').addEventListener('click',()=>startXR().catch(e=>{$('#xro').hidden=true;try{XS&&XS.session.end()}catch(x){}$('#msg').textContent='No se pudo iniciar el modo preciso: '+(e&&e.message||e)+'. Probá con "Ver en mi espacio con la cámara".';$('#msg').scrollIntoView({block:'center'})}));
 async function startXR(){
@@ -236,9 +240,9 @@ async function startXR(){
   $('#xShow').onclick=()=>{ov.classList.remove('clean');$('#xShow').hidden=true};
   let wantShot=false,binding=null;try{binding=new XRWebGLBinding(session,R.getContext())}catch(e){}
   $('#xShot').onclick=()=>{wantShot=true};
-  async function deliver(canvas){const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));const name=`robot-rowa-${Date.now()}.jpg`;
-    try{const f=new File([blob],name,{type:'image/jpeg'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Robot BD Rowa'});return}}catch(e){if(e&&e.name==='AbortError')return}
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove()}
+  async function deliver(canvas){const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));const d=new Date(),p=n=>String(n).padStart(2,'0');
+    const name=`Robot-Rowa-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.jpg`;
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),60000)}
   function shoot(frame){wantShot=false;
     try{const pose=frame.getViewerPose(ref),view=pose&&pose.views[0];
       if(!binding||!view||!view.camera)throw new Error('sin acceso a la cámara');
@@ -251,7 +255,7 @@ async function startXR(){
       const out=document.createElement('canvas');out.width=w;out.height=hh;const x=out.getContext('2d');
       const put=(buf)=>{const id=new ImageData(w,hh),row=w*4;for(let y=0;y<hh;y++)id.data.set(buf.subarray((hh-1-y)*row,(hh-y)*row),y*row);return id};
       x.putImageData(put(cb),0,0);const tmp=document.createElement('canvas');tmp.width=w;tmp.height=hh;tmp.getContext('2d').putImageData(put(vb),0,0);x.drawImage(tmp,0,0);
-      $('#xFlash').hidden=false;setTimeout(()=>$('#xFlash').hidden=true,150);deliver(out);say('Foto lista: elegí dónde guardarla o compartirla.')}
+      $('#xFlash').hidden=false;setTimeout(()=>$('#xFlash').hidden=true,150);deliver(out);say('Foto guardada. La encontrás en la galería, en el álbum Descargas (Download).')}
     catch(e){say('Este celular no deja sacar la foto desde la página ('+e.message+'). Tocá "Ocultar" y hacé una captura de pantalla (power + bajar volumen), o grabá la pantalla para video.')}}
   session.addEventListener('end',()=>{R.setAnimationLoop(null);R.domElement.remove();R.dispose();ov.hidden=true;XS=null});
   const ray=new T.Raycaster(),hit=new T.Vector3(),pl=new T.Plane(new T.Vector3(0,1,0),0);
