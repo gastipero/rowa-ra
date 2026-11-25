@@ -13,6 +13,7 @@ model-viewer{width:100%;height:min(62vh,560px);background:linear-gradient(#eef1f
 label{display:grid;gap:4px;font-size:13px;color:#5d6080}select,input{font:600 16px Montserrat,sans-serif;padding:9px;border:1px solid #d9dbe8;border-radius:8px;background:#fff;min-height:44px}
 .dims{font-weight:700;font-size:17px;margin:10px 0}.note{font-size:13px;color:#5d6080}
 ol{padding-left:20px}
+[hidden]{display:none!important}
 .pwrap{display:flex;align-items:center;gap:6px;margin-top:6px}.pend{font-size:12px;color:#5d6080}
 .pstrip{display:flex;gap:3px;overflow-x:auto;flex:1;padding:2px}
 .pcell{flex:1 0 32px;min-height:52px;border:1px solid #d9dbe8;border-radius:6px;background:#fff;font:600 12px Montserrat,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1d1d1b;padding:2px}
@@ -29,7 +30,12 @@ ol{padding-left:20px}
   <label>Largo<select id="L"></select></label>
   <label>Alto<select id="H"></select></label>
   <label>Color<select id="c"><option value="white">Blanco</option><option value="anth">Antracita</option></select></label>
+  <label>Instalación<select id="i"><option value="vista">A la vista</option><option value="mostrador">Tras un mostrador</option><option value="pared">Oculto tras pared (salidas directas)</option><option value="techo">En el techo / planta alta (espirales)</option></select></label>
+  <label id="ld">Distancia mostrador–robot<select id="d"></select></label>
+  <label id="lt">Altura del techo<select id="t"></select></label>
+  <label id="lx" class="chkl"><span>Robot oculto</span><select id="x"><option value="1">Mostrar transparente</option><option value="0">No mostrar</option></select></label>
 </div>
+<p class="note" id="idesc"></p>
 <div class="panels"><b>Paneles del lateral</b> <span class="note">Tocá un panel: liso → salida → vidrio.</span>
 <div class="pwrap"><span class="pend">Fondo</span><div class="pstrip" id="strip"></div><span class="pend">Frente</span></div><p class="note" id="pinfo"></p></div>
 <p class="note" id="msg"></p>
@@ -102,6 +108,25 @@ function buildRobot(c,col,o={}){
   if(o.outputs!==false)outX.forEach(x=>{const u=outUnit(col);u.position.set(x,o.outY||1.1,W/2);outs.add(u)});
   return g;
 }
+function ghostMat(){return new T.MeshStandardMaterial({color:0x6f8fd8,transparent:true,opacity:.22,depthWrite:false,roughness:.6})}
+function buildInstall(cfg,lay,nOut){
+  const root=new T.Group(),L=cfg.L/1000,H=cfg.H/1000,mode=cfg.i,hc=0.9,dep=0.6,sep=cfg.d,ceil=Math.max(cfg.t,H+0.1);
+  const g=buildRobot({L:cfg.L,H:cfg.H,outs:nOut},cfg.c,{layout:lay,outputs:mode!=='techo',outY:mode==='pared'?hc+0.25:1.1});root.add(g);
+  const hidden=mode==='pared'||mode==='techo';
+  if(hidden){if(cfg.x)g.userData.body.traverse(m=>{if(m.isMesh){m.material=ghostMat();m.castShadow=false}});else g.userData.body.visible=false}
+  if(mode==='techo')g.position.y=ceil;
+  // mostrador delante del lado de las salidas (+Z)
+  const counterZ=mode==='techo'?W/2-0.3-dep/2+0.1:W/2+sep+dep/2;
+  if(mode!=='vista'){const cm=mat(0xe4ded4,{roughness:.7}),tm=mat(0x7a6e62,{roughness:.5}),cg=new T.Group();
+    cg.add(box(L+0.4,hc-0.04,dep,cm,0,(hc-0.04)/2,0));cg.add(box(L+0.5,0.04,dep+0.06,tm,0,hc-0.02,0));cg.position.z=counterZ;root.add(cg)}
+  if(mode==='pared'){const wm=mat(0xf3f1ec,{roughness:.9});const wh=Math.max(ceil,H+0.2);
+    const zW=W/2+0.02;root.add(box(L+1.2,wh,0.04,wm,0,wh/2,zW))}
+  if(mode==='techo'){const xs=g.userData.outX.length?g.userData.outX:[L/2-0.6];
+    xs.forEach(x=>{const s=spiral(hc+0.05,ceil);s.position.set(x,0,counterZ-0.1);root.add(s)});
+    const sl=mat(0xf3f1ec,{roughness:.9,transparent:true,opacity:.35,depthWrite:false});root.add(box(L+1.2,0.05,W+1.2,sl,0,ceil-0.03,0))}
+  // huella en el piso: ancla el modelo al piso y marca el lugar del robot
+  const fp=new T.Mesh(new T.PlaneGeometry(L,W),new T.MeshStandardMaterial({color:0xba5d9e,transparent:true,opacity:.28,depthWrite:false}));fp.rotation.x=-Math.PI/2;fp.position.y=0.003;root.add(fp);
+  return root}
 const VL=[2614,3095,3575,4056,4536,5017,5497,5978,6458,6939,7419,7900,8380,8861,9341,9822,10302,10783,11263,11744,12224,12705,13185,13666,14146,14627,15107].map(c=>Math.round((c+62)/10)*10);
 const VH=Array.from({length:37},(_,i)=>1720+i*50);
 const SIZES={vmax:{L:VL,H:VH},smart:{L:[3280,3580,4060,4540,5020,5500,5980,6460],H:[2320,2520,2820]}};
@@ -109,21 +134,27 @@ const near=(a,v)=>a.reduce((b,x)=>Math.abs(x-v)<Math.abs(b-v)?x:b,a[0]);
 function fill(m,L,H){for(const k of ['L','H']){const sel=$('#'+k),list=SIZES[m][k],v=near(list,k==='L'?L:H);
   sel.innerHTML=list.map(x=>`<option value="${x}">${x.toLocaleString('es-AR')} mm</option>`).join('');sel.value=String(v)}}
 const P=new URLSearchParams(location.hash.slice(1));
-const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white'};
+const opt=(id,a,f)=>{$('#'+id).innerHTML=a.map(v=>`<option value="${v}">${f(v)}</option>`).join('')};
+opt('d',[0.6,0.8,1,1.2,1.4,1.6,1.8,2,2.5,3],v=>v.toFixed(1).replace('.',',')+' m');
+opt('t',[2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4],v=>v.toFixed(1).replace('.',',')+' m');
+const cfg={m:P.get('m')||'vmax',L:+P.get('L')||8440,H:+P.get('H')||2620,c:P.get('c')||'white',i:P.get('i')||'vista',d:+P.get('d')||1.2,t:+P.get('t')||3,x:P.has('x')?+P.get('x'):1};
+if(!['vista','mostrador','pared','techo'].includes(cfg.i))cfg.i='vista';
 let lay=(P.get('p')||'').split('').map(Number).filter(v=>v>=0&&v<=2);const o0=P.has('o')?+P.get('o'):2;
-cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c'])$('#'+k).value=cfg[k];
+cfg.m=cfg.m==='smart'?'smart':'vmax';fill(cfg.m,cfg.L,cfg.H);for(const k of ['m','c','i','d','t','x'])$('#'+k).value=String(cfg[k]);
+for(const k of ['d','t']){const sel=$('#'+k);if(!sel.value){const vs=[...sel.options].map(o=>+o.value);sel.value=String(near(vs,cfg[k]))}}
 $('#m').addEventListener('change',()=>fill($('#m').value,+$('#L').value,+$('#H').value));
 let url=null;
 async function make(){
-  for(const k in cfg)cfg[k]=['m','c'].includes(k)?$('#'+k).value:+$('#'+k).value;
+  for(const k in cfg)cfg[k]=['m','c','i'].includes(k)?$('#'+k).value:+$('#'+k).value;
+  $('#ld').hidden=cfg.i==='vista';$('#lt').hidden=cfg.i!=='techo';$('#lx').hidden=!['pared','techo'].includes(cfg.i);
+  $('#idesc').textContent={vista:'El robot queda apoyado en el piso, a la vista.',mostrador:'Se agrega un mostrador de 0,90 m delante del robot, del lado de las salidas.',pared:'Se dibuja una pared delante del robot con las salidas directas a la altura de la mesada, y el mostrador delante. El robot queda detrás de la pared.',techo:'El robot queda arriba, a la altura del techo, y bajan espirales desde cada salida hasta el mostrador. En la cámara el techo real no lo tapa: usá "Robot oculto" para verlo transparente o esconderlo.'}[cfg.i];
   const n=nPan(cfg.L/1000);if(lay.length!==n)lay=lay.length?Array.from({length:n},(_,i)=>lay[i]||0):defLayout(n,o0,0);
   $('#strip').innerHTML=lay.map((v,i)=>`<button type="button" class="pcell p${v}" data-i="${i}" aria-label="Panel ${i+1}"><span>${i+1}</span><i>${['','Salida','Vidrio'][v]}</i></button>`).reverse().join('');$('#strip').scrollLeft=$('#strip').scrollWidth;
   const pitch=cfg.L/n,oi=lay.map((v,i)=>v===1?i:-1).filter(i=>i>=0);
   $('#pinfo').textContent=oi.length?'Salidas a '+oi.map(i=>Math.round((i+0.5)*pitch).toLocaleString('es-AR')+' mm').join(', ')+' del frente (centro de cada salida).':'Sin salidas en el lateral.';
   history.replaceState(null,'','#'+new URLSearchParams({...cfg,p:lay.join('')}).toString());
   $('#dims').textContent=`${cfg.m==='smart'?'BD Rowa Smart':'BD Rowa VMAX 160'} · ${cfg.L.toLocaleString('es-AR')} × 1.630 × ${cfg.H.toLocaleString('es-AR')} mm`;
-  const g=buildRobot({L:cfg.L,H:cfg.H,outs:oi.length},cfg.c,{layout:lay});g.position.x=0;
-  const sc=new T.Scene();sc.add(g);
+  const sc=new T.Scene();sc.add(buildInstall(cfg,lay,oi.length));
   try{const glb=await new Promise((ok,ko)=>new T.GLTFExporter().parse(sc,ok,ko,{binary:true}));
     if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(new Blob([glb],{type:'model/gltf-binary'}));$('#mv').src=url;$('#msg').textContent=''}
   catch(e){$('#msg').textContent='No se pudo generar el modelo: '+e.message}
